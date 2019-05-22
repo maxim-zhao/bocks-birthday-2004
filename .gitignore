@@ -1,0 +1,6 @@
+*.sms
+*.zip
+Thumbs.db
+*.sym
+/src/psmplayer
+/src/mod2psg2
