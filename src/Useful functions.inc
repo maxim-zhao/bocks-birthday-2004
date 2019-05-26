@@ -136,7 +136,7 @@ DefaultInitialiseVDP:
     pop hl
     ret
 
-.define SpriteSet           0       ; 0 for sprites to use tiles 0-255, 1 for 256+
+.define SpriteSet           1       ; 0 for sprites to use tiles 0-255, 1 for 256+
 
 _Data:
     .db %00000100,$80

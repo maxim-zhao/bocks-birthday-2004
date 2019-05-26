@@ -1,4 +1,4 @@
-;.define AlwaysPerfect
+F;.define AlwaysPerfect
 
 ;==============================================================
 ; WLA-DX banking setup
@@ -14,19 +14,19 @@ slot 2 $8000
 .endme
 
 .rombankmap
-bankstotal 4
+bankstotal 3
 banksize $7ff0
 banks 1
 banksize $10
 banks 1
 banksize $4000
-banks 2
+banks 1
 .endro
 
 ;==============================================================
 ; RAM
 ;==============================================================
-.enum $c000
+.enum $c000 export
 PSGMOD_START_ADDRESS dsb $100
 SpriteTable          dsb $100 ; RAM copy of it
 NumSprites           db       ; how many sprites there are in it
@@ -93,7 +93,11 @@ SDSCNotes:
 .bank 0 slot 0
 .org $0000
 .include "Useful functions.inc"
-.include "Phantasy Star decompressors.inc"
+
+.section "ZX7" free
+.define ZX7ToVRAM
+.include "ZX7 decompressor.asm"
+.ends
 
 .section "PSGMod stuff" free
 .include "psgmod.inc"
@@ -126,15 +130,31 @@ CallHL:
 .ends
 
 .section "Game VBlank handler" free
+.define DebugTiming
+.macro DebugColour args colour
+.ifdef DebugTiming
+  ld a,colour|$f0
+  out (VDPAddress),a
+  ld a,$87
+  out (VDPAddress),a
+.endif
+.endm
+
   ; stuff that has to happen first
 GameVBlankHandler:
+  DebugColour 1
   call ScrollAndManageArrows
+  DebugColour 2
   call GetInputs
   ; Stuff that has to happen in the VBlank, and timing-sensitive
   ; things that it depends on
+  DebugColour 3
   call ColourArrows
+  DebugColour 4
   call UpdatePalette
+  DebugColour 5
   call OutputSpriteTable
+  DebugColour 6
   ; Everything else that can overflow into the active display period without breaking
   ; count down StepLagTime
   ld a,(StepLagTime)
@@ -144,14 +164,14 @@ GameVBlankHandler:
   ; if StepLagTime is non-zero then count it down
   dec a
   ld (StepLagTime),a
+  DebugColour 0
   ret
 
 StepsActiveVBlank:
   ; stuff to do when steps are active
-  ; not enough room for this before the pause handler :)
   call ProcessInputs
   call UpdateRating
-  call PSGMOD_Play
+  call PSGMOD_Play ; sometimes takes ~3 lines
   call SlideRating
   call UpdateScore
   ret
@@ -205,7 +225,11 @@ main:
   ; load tiles
   ld de,$4000 ; tile index 0
   ld hl,ArrowTiles
-  call LoadTiles4BitRLENoDI
+  call zx7_decompress
+
+  ld de,$4000+256*32 ; tile index 256
+  ld hl,SpriteTiles
+  call zx7_decompress
 
   ; load palette
   ld hl,GamePalette
@@ -471,12 +495,24 @@ ScrollTable2440: ; scroll 40 lines in 24 frames
 
 .section "Graphics data" free
 ArrowTiles:
-.incbin "tiles.pscompr"
+.incbin "backgrounds/arrows.png.tiles.zx7"
 GamePalette:
-.db cl012 cl000 cl111 cl222 cl333 cl330 cl231 cl232 0     0     0     0     0     0     0     0
-.db cl012 cl000 cl111 cl222 cl333 cl211 cl212 cl202 0     0     0     0     0     0     0     0
-;   BG    <-black---grey--white-> >-Arrow---------> <-Text colour scroll--> <--Top arrow entries-->
+.db cl012 cl000 cl111 cl333 cl330 cl231 cl232 0     0     0     0     0     0     0     0     0
+.db cl012 cl000 cl111 cl333 cl211 cl212 cl202 0     0     0     0     0     0     0     0     0
+;   BG    <-black-g-white-> >-Arrow---------> <-Text colour scroll--> <-Top arrow entries-> Unused
 ; Notice the alternative arrow colour using the sprite palette
+.enum 0
+  PaletteBG db
+  PaletteGreys dsb 3
+  PaletteArrows dsb 3
+  PaletteText dsb 4
+  PaletteArrowHighlights dsb 4
+.ende
+.ends
+
+.section "Sprites data" free
+SpriteTiles:
+.incbin "sprites/sprites.png.tiles.zx7"
 .ends
 
 .section "Output sprite table to VRAM with flickering" free
@@ -582,8 +618,8 @@ GetInputs:
 
 .section "Colour arrows according to the buttons pressed" free
 ColourArrows:
-  ld ix,ActualPalette+16+12
-  ; colours are at indices 12,13,14,15 in the sprite palette
+  ld ix,ActualPalette+16+PaletteArrowHighlights
+  ; colours are at indices 11-14 in the sprite palette
   ; in the order LDUR
   ld a,(ButtonsDown)
 ;  ld b,a
@@ -617,37 +653,39 @@ ColourArrows:
   ret
 .ends
 
-.section "ScrollAndManageArrows" free
+.section "Scroll and manage arrows" free
 LeftArrow:
-.db $00,$01,$02,$03,$00
-.db $07,$0D,$0E,$0F,$10
-.db $1D,$1E,$1F,$20,$21
-.db $31,$32,$33,$34,$35
-.db $00,$36,$45,$46,$00
+; Tilemap data cut out of BMP2Tile text format
+; Must be recreated any time arrows.png is edited
+.dw $0000 $0001 $0002 $0003 $0000
+.dw $0006 $0009 $000A $000B $000C
+.dw $0017 $0018 $0019 $001A $001B
+.dw $0406 $0616 $0615 $0614 $040C
+.dw $0000 $0401 $0608 $0403 $0000
 
 DownArrow:
-.db $00,$04,$05,$06,$00
-.db $11,$12,$13,$14,$15
-.db $22,$23,$24,$25,$26
-.db $36,$37,$38,$39,$3A
-.db $00,$31,$47,$44,$00
+.dw $0000 $0004 $0005 $0204 $0000
+.dw $000D $000E $000F $0010 $020D
+.dw $001C $001D $001E $001F $0020
+.dw $0401 $0411 $0412 $0413 $0601
+.dw $0000 $0406 $0407 $0606 $0000
 
 UpArrow:
-.db $00,$07,$08,$09,$00
-.db $01,$16,$17,$18,$0C
-.db $27,$28,$29,$2A,$2B
-.db $3B,$3C,$3D,$3E,$3F
-.db $00,$48,$49,$4A,$00
+.dw $0000 $0006 $0007 $0206 $0000
+.dw $0001 $0011 $0012 $0013 $0201
+.dw $041C $041D $041E $041F $0420
+.dw $040D $040E $040F $0410 $060D
+.dw $0000 $0404 $0405 $0604 $0000
 
 RightArrow:
-.db $00,$0A,$0B,$0C,$00
-.db $19,$1A,$1B,$1C,$09
-.db $2C,$2D,$2E,$2F,$30
-.db $40,$41,$42,$43,$44
-.db $00,$4B,$4C,$3A,$00
+.dw $0000 $0203 $0008 $0201 $0000
+.dw $020C $0014 $0015 $0016 $0206
+.dw $061B $061A $0619 $0618 $0617
+.dw $060C $060B $060A $0609 $0606
+.dw $0000 $0603 $0602 $0601 $0000
 
 BlankSpace:
-.dsb 5*5, 0
+.dsw 5*5, 0
 
 ; Scroll the screen up
 ; If it's time for a new arrow, draw it, overwriting any old ones
@@ -705,25 +743,25 @@ ScrollAndManageArrows:
 
   call GetReadyForDrawing ; find where to draw and set hl to the VRAM pointer value
 
-  ld de,LeftArrow+5*2
+  ld de,LeftArrow+5*2*2
   bit 2,(ix+0)
   call z,NoArrow
   call DrawArrowSection
   ld bc,6*2
   add hl,bc
-  ld de,DownArrow+5*2
+  ld de,DownArrow+5*2*2
   bit 1,(ix+0)
   call z,NoArrow
   call DrawArrowSection
   ld bc,6*2
   add hl,bc
-  ld de,UpArrow+5*2
+  ld de,UpArrow+5*2*2
   bit 0,(ix+0)
   call z,NoArrow
   call DrawArrowSection
   ld bc,6*2
   add hl,bc
-  ld de,RightArrow+5*2
+  ld de,RightArrow+5*2*2
   bit 3,(ix+0)
   call z,NoArrow
   call DrawArrowSection
@@ -833,7 +871,7 @@ NoArrow:
   ret
 
 DrawArrowSection:
-; draw 5x3 byte number tiles from (de) to VRAM at (hl)
+; draw 5x3 word tile data from (de) to VRAM at (hl)
 ; do not destroy hl
   push hl
     call VRAMToHL
@@ -856,7 +894,9 @@ Output5:
     ld b,5
   -:ld a,(hl)
     out (VDPData),a
+    inc hl
     ld a,(ArrowHighByte)
+    or (hl)
     out (VDPData),a
     inc hl
     djnz -
@@ -983,7 +1023,7 @@ NewRating:
 
   ; load palette
   ; hl points to it
-  ld de,ActualPalette+16+8 ; that's where my colour cycling is
+  ld de,ActualPalette+16+PaletteText ; that's where my colour cycling is
   ldi
   ldi
   ldi
@@ -1010,32 +1050,32 @@ Ratings:
 RatingPerfect:
 .db 22 ; number of sprites
 .db 20 ; starting x value
-.db $6D,$6E,$6F,$70,$71,$72,$73,$74,$75,$76,$77,0 ; tile numbers - 0 signals end-of-row
-.db $78,$79,$7A,$7B,$7C,$7D,$7E,$7F,$80,$81,$82
+.db $21,$22,$23,$24,$25,$26,$27,$28,$29,$2a,$2b,0 ; tile numbers - 0 signals end-of-row
+.db $2c,$2d,$2e,$2f,$30,$31,$32,$33,$34,$35,$36
 .db cl030,cl020,cl010,cl020 ; palette (4 colours)
 
 RatingGreat:
 .db 18,40
-.db $83,$84,$85,$86,$87,$88,$89,$8A,$8B,0
-.db $8C,$8D,$8E,$8F,$90,$91,$92,$93,$94
+.db $37,$38,$39,$3a,$3b,$3c,$3d,$3e,$3f,0
+.db $40,$41,$42,$43,$44,$45,$46,$47,$48
 .db cl033,cl032,cl031,cl032
 
 RatingGood:
 .db 14,58
-.db $95,$96,$97,$98,$99,$9A,$9B,0
-.db $9C,$9D,$9E,$9F,$A0,$A1,$A2
+.db $49,$4a,$4b,$4c,$4d,$4e,$4f,0
+.db $50,$51,$52,$53,$54,$55,$56
 .db cl021,cl221,cl330,cl221
 
 RatingBoo:
 .db 10,68
-.db $A3,$A4,$A5,$A6,$A7,0
-.db $A8,$A9,$AA,$AB,$AC
+.db $57,$58,$59,$5a,$5b,0
+.db $5c,$5d,$5e,$5f,$60
 .db cl100,cl200,cl300,cl200
 
 RatingMiss:
 .db 14,57
-.db $AD,$AE,$AF,$B0,$B1,$B2,$B3,0
-.db $B4,$B5,$B6,$B7,$B8,$B9,$BA
+.db $61,$62,$63,$64,$65,$66,$67,0
+.db $68,$69,$6a,$6b,$6c,$6d,$6e
 .db cl300,cl201,cl000,cl302
 
 UpdateRating:
@@ -1057,7 +1097,7 @@ UpdateRating:
   and $3
   jr nz,+
   ; every 4 frames, rotate the palette
-  ld a,16+8 ; starting index
+  ld a,16+PaletteText ; starting index
   ld c,4    ; count
   call RotatePalette
 +:
@@ -1152,9 +1192,9 @@ SpriteData:
 ; unused section
 .dsb 64,0
 ; x positions/tile indices
-.db 18,$4D,34,$4E,50,$4F, 65,$50,81,$51,97,$52, 113,$53,129,$54,145,$55, 162,$56,178,$57,194,$58
-.db 18,$59,34,$5A,50,$5B, 65,$5C,81,$5D,97,$5E, 113,$5F,129,$60,145,$61, 162,$62,178,$63,194,$64
-.db 18,$65,34,$66,        65,$67,81,$68,        113,$69,129,$6A,         162,$6B,178,$6C,194
+.db 18,$01,34,$02,50,$03, 65,$04,81,$05,97,$06, 113,$07,129,$08,145,$09, 162,$0a,178,$0b,194,$0c
+.db 18,$0d,34,$0e,50,$0f, 65,$10,81,$11,97,$12, 113,$13,129,$14,145,$15, 162,$16,178,$17,194,$18
+.db 18,$19,34,$1a,        65,$1b,81,$1c,        113,$1d,129,$1e,         162,$1f,178,$20,194
 
 .ends
 
@@ -1212,7 +1252,7 @@ ProcessInputs:
   ; StepHappeningPointer is now pointing at the closest step
 
 ++:
-
+/*
   ; debug: make it viewable
   xor a
   bit 2,(ix+0) ; L
@@ -1234,7 +1274,7 @@ ProcessInputs:
   jr z,+
   cpl
 +:ld ($d003),a
-
+*/
   ; next: compare with player input
   ; when the player presses something, it'll be in ButtonsPressed for one frame only
 
@@ -1546,7 +1586,7 @@ InitialiseScore:
 -:ld (hl),a
   add a,16
   inc hl
-  ld (hl),187 ; zero digit
+  ld (hl),DIGIT_0 ; zero digit
   inc hl
   djnz -
 
@@ -1558,7 +1598,7 @@ InitialiseScore:
 -:ld (hl),a
   add a,16
   inc hl
-  ld (hl),187 ; zero digit
+  ld (hl),DIGIT_0 ; zero digit
   inc hl
   djnz -
 
@@ -1578,6 +1618,9 @@ InitialiseScore:
   ret
 
 UpdateScoreDisplay:
+
+.define DIGIT_0 $6f
+
   ; read score from ScoreHigh, ScoreLow
   ; convert to decimal (!)
   ; change sprite indices one at a time
@@ -1608,7 +1651,7 @@ UpdateScoreDisplay:
   adc hl,bc
 
   ; that's my digit
-  add a,187 ; index of 0 sprite
+  add a,DIGIT_0 ; index of 0 sprite
   ld (iy+1),a
 
   ; and repeat for other digits
@@ -1624,7 +1667,7 @@ UpdateScoreDisplay:
   ld de,$4240
   add ix,de
   adc hl,bc
-  add a,187
+  add a,DIGIT_0
   ld (iy+3),a
 
   ld bc,$fffe ; bcde = -100000
@@ -1638,7 +1681,7 @@ UpdateScoreDisplay:
   ld de,$86a0
   add ix,de
   adc hl,bc
-  add a,187
+  add a,DIGIT_0
   ld (iy+5),a
 
   ld bc,$ffff ; bcde = -10000
@@ -1652,7 +1695,7 @@ UpdateScoreDisplay:
   ld de,$2710
   add ix,de
   adc hl,bc
-  add a,187
+  add a,DIGIT_0
   ld (iy+7),a
 
   ; maybe I could avoid processing all 32 bits now
@@ -1667,7 +1710,7 @@ UpdateScoreDisplay:
   ld de,$03e8
   add ix,de
   adc hl,bc
-  add a,187
+  add a,DIGIT_0
   ld (iy+9),a
 
   ; only 8 bits now
@@ -1682,7 +1725,7 @@ UpdateScoreDisplay:
   ld de,$0064
   add ix,de
   adc hl,bc
-  add a,187
+  add a,DIGIT_0
   ld (iy+11),a
 
   ld bc,$ffff ; bcde = -10
@@ -1696,12 +1739,12 @@ UpdateScoreDisplay:
   ld de,$000a
   add ix,de
   adc hl,bc
-  add a,187
+  add a,DIGIT_0
   ld (iy+13),a
 
   ; only the last digit left
   ld a,ixl
-  add a,187
+  add a,DIGIT_0
   ld (iy+15),a
 
   ; Now, do the same for the combo
@@ -1727,16 +1770,16 @@ UpdateScoreDisplay:
   ; that's it
   push af
     ld a,c
-    add a,187
+    add a,DIGIT_0 ; index of 0 tile
     ld (iy+1),a
   pop af
-  add a,187
+  add a,$6f
   ld (iy+3),a
 
   ret
 
 _MoreThan99:
-  ld a,197
+  ld a,DIGIT_0+10 ; index of >99 tiles
   ld (iy+1),a
   inc a
   ld (iy+3),a
@@ -1756,12 +1799,12 @@ TitleScreen:
   ; load tiles
   ld de,$4000 ; tile index 0
   ld hl,xiaoTiles
-  call LoadTiles4BitRLENoDI
+  call zx7_decompress
 
   ; load tilemap
   ld de,TileMapAddress
   ld hl,xiaoTilemap
-  call LoadTilemapToVRAM
+  call zx7_decompress
 
   ; load palette
   ld hl,xiaoPalette
@@ -1779,10 +1822,10 @@ TitleScreen:
   ld ($ffff),a
   ld de,$4000
   ld hl,BB2K4Tiles
-  call LoadTiles4BitRLENoDI
+  call zx7_decompress
   ld de,TileMapAddress
   ld hl,BB2K4Tilemap
-  call LoadTilemapToVRAM
+  call zx7_decompress
   ld hl,BB2K4Palette
   ld de,ActualPalette 
   ld bc,32
@@ -1797,10 +1840,10 @@ TitleScreen:
 
   ld de,$4000
   ld hl,S3Tiles
-  call LoadTiles4BitRLENoDI
+  call zx7_decompress
   ld de,TileMapAddress
   ld hl,S3Tilemap
-  call LoadTilemapToVRAM
+  call zx7_decompress
   ld hl,S3Palette
   ld de,ActualPalette
   ld bc,32
@@ -1817,10 +1860,10 @@ TitleScreen:
   ld ($ffff),a
   ld de,$4000
   ld hl,sp8Tiles
-  call LoadTiles4BitRLENoDI
+  call zx7_decompress
   ld de,TileMapAddress
   ld hl,sp8Tilemap
-  call LoadTilemapToVRAM
+  call zx7_decompress
   ld hl,sp8Palette
   ld de,ActualPalette 
   ld bc,32
@@ -1837,10 +1880,10 @@ TitleScreen:
   ld ($ffff),a
   ld de,$4000
   ld hl,CV3Tiles
-  call LoadTiles4BitRLENoDI
+  call zx7_decompress
   ld de,TileMapAddress
   ld hl,CV3Tilemap
-  call LoadTilemapToVRAM
+  call zx7_decompress
   ld hl,CV3Palette
   ld de,ActualPalette
   ld bc,32
@@ -1855,10 +1898,10 @@ TitleScreen:
 
   ld de,$4000
   ld hl,BBRTiles
-  call LoadTiles4BitRLENoDI
+  call zx7_decompress
   ld de,TileMapAddress
   ld hl,BBRTilemap
-  call LoadTilemapToVRAM
+  call zx7_decompress
   ld hl,BBRPalette
   ld de,ActualPalette
   ld bc,32
@@ -1873,10 +1916,10 @@ TitleScreen:
 
   ld de,$4000
   ld hl,LSTiles
-  call LoadTiles4BitRLENoDI
+  call zx7_decompress
   ld de,TileMapAddress
   ld hl,LSTilemap
-  call LoadTilemapToVRAM
+  call zx7_decompress
   ld hl,LSPalette
   ld de,ActualPalette
   ld bc,32
@@ -1976,10 +2019,10 @@ HighlightDifficulty:
 AKA:
   ld de,$4000
   ld hl,akaTiles
-  call LoadTiles4BitRLENoDI
+  call zx7_decompress
   ld de,TileMapAddress
   ld hl,akaTilemap
-  call LoadTilemapToVRAM
+  call zx7_decompress
   ld hl,akaPalette
   ld de,ActualPalette
   ld bc,32
@@ -2128,31 +2171,31 @@ FadePalette:
 
 
 xiaoTiles:
-.incbin "xiao (tiles).pscompr"
+.incbin "backgrounds/xiao.png.tiles.zx7"
 xiaoTilemap:
-.incbin "xiao (tile numbers).pscompr"
+.incbin "backgrounds/xiao.png.tilemap.zx7"
 akaPalette:
 xiaoPalette:
-.include "xiao (palette).inc"
+.incbin "backgrounds/xiao.png.palette.bin"
 
 akaTiles:
-.incbin "aka (tiles).pscompr"
+.incbin "backgrounds/aka.png.tiles.zx7"
 akaTilemap:
-.incbin "aka (tile numbers).pscompr"
+.incbin "backgrounds/aka.png.tilemap.zx7"
 
 BBRTiles:
-.incbin "BBR (tiles).pscompr"
+.incbin "backgrounds/BBR.png.tiles.zx7"
 BBRTilemap:
-.incbin "BBR (tile numbers).pscompr"
+.incbin "backgrounds/BBR.png.tilemap.zx7"
 BBRPalette:
-.include "BBR (palette).inc"
+.incbin "backgrounds/BBR.png.palette.bin"
 
 S3Tiles:
-.incbin "Shenmue 3 (tiles).pscompr"
+.incbin "backgrounds/Shenmue 3.png.tiles.zx7"
 S3Tilemap:
-.incbin "Shenmue 3 (tile numbers).pscompr"
+.incbin "backgrounds/Shenmue 3.png.tilemap.zx7"
 S3Palette:
-.include "Shenmue 3 (palette).inc"
+.incbin "backgrounds/Shenmue 3.png.palette.bin"
 
 
 .ends
@@ -2245,31 +2288,33 @@ ButterflyMusic:
 
 .section "More GFX" superfree
 CV3Tiles:
-.incbin "CV3 (tiles).pscompr"
+.incbin "backgrounds/CV3.png.tiles.zx7"
 CV3Tilemap:
-.incbin "CV3 (tile numbers).pscompr"
+.incbin "backgrounds/CV3.png.tilemap.zx7"
 CV3Palette:
-.include "CV3 (palette).inc"
+.incbin "backgrounds/CV3.png.palette.bin"
 
 BB2K4Tiles:
-.incbin "BB2K4 (tiles).pscompr"
+.incbin "backgrounds/BB2K4.png.tiles.zx7"
 BB2K4Tilemap:
-.incbin "BB2K4 (tile numbers).pscompr"
+.incbin "backgrounds/BB2K4.png.tilemap.zx7"
 BB2K4Palette:
-.include "BB2K4 (palette).inc"
+.incbin "backgrounds/BB2K4.png.palette.bin"
 
 sp8Tiles:
-.incbin "sp8 (tiles).pscompr"
+.incbin "backgrounds/sp8.png.tiles.zx7"
 sp8Tilemap:
-.incbin "sp8 (tile numbers).pscompr"
+.incbin "backgrounds/sp8.png.tilemap.zx7"
 sp8Palette:
-.include "sp8 (palette).inc"
+.incbin "backgrounds/sp8.png.palette.bin"
 
 LSTiles:
-.incbin "levelselect (tiles).pscompr"
+.incbin "backgrounds/levelselect.png.tiles.zx7"
 LSTilemap:
-.incbin "levelselect (tile numbers).pscompr"
+.incbin "backgrounds/levelselect.png.tilemap.zx7"
 LSPalette:
-.include "levelselect (palette).inc"
+;.incbin "levelselect.png.palette.bin"
+; Hack the palette as we tweak it for the menu selection
+.db $00 $15 $03 $3F $3F $3F
 
 .ends
