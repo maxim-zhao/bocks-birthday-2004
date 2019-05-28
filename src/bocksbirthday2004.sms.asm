@@ -14,13 +14,13 @@ slot 2 $8000
 .endme
 
 .rombankmap
-bankstotal 3
+bankstotal 2
 banksize $7ff0
 banks 1
 banksize $10
 banks 1
-banksize $4000
-banks 1
+;banksize $4000
+;banks 1
 .endro
 
 ;==============================================================
@@ -243,22 +243,6 @@ main:
   xor a
   ld (SpriteDirection),a
 
-  ld hl,GameVBlankHandler
-  ld (VBlankHandler),hl
-
-  ; Turn screen on
-  ld a,%11100101
-;        |||| |`- Zoomed sprites -> 16x16 pixels
-;        |||| `-- Doubled sprites -> 2 tiles per sprite, 8x16
-;        |||`---- 30 row/240 line mode
-;        ||`----- 28 row/224 line mode
-;        |`------ VBlank interrupts
-;        `------- Enable display
-  out ($bf),a
-  ld a,$81
-  out ($bf),a
-
-
   ld a,:ButterflyMusic
   ld hl,ButterflyMusic
   call PSGMOD_LoadModule
@@ -330,6 +314,23 @@ main:
 
   ld a,60 ; TODO :change this?
   ld (RatingLength),a
+
+  ld hl,GameVBlankHandler
+  ld (VBlankHandler),hl
+  
+  call WaitForVBlankNoInt
+
+  ; Turn screen on
+  ld a,%11100101
+;        |||| |`- Zoomed sprites -> 16x16 pixels
+;        |||| `-- Doubled sprites -> 2 tiles per sprite, 8x16
+;        |||`---- 30 row/240 line mode
+;        ||`----- 28 row/224 line mode
+;        |`------ VBlank interrupts
+;        `------- Enable display
+  out ($bf),a
+  ld a,$81
+  out ($bf),a
 
   ei
 
@@ -2199,8 +2200,6 @@ WaitForButton:
     pop af
     ret
 .ends
-
-.bank 2 slot 2
 
 .section "music" superfree
 ButterflyMusic:
