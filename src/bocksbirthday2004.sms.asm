@@ -207,35 +207,35 @@ main:
 
   call TitleScreen
   ld a,(Difficulty)
+
   push af
+    call ClearVRAM
 
-  call ClearVRAM
+    ; clear RAM
+    ld bc,$1f00 ; avoid killing the stack
+    ; I don't care about the port $3e value in ram at $c000
+    ld hl,$c000
+    ld de,$c001
+    ld a,0
+    ld (hl),a ; zero
+    ldir     ; propagate that through RAM
 
-  ; clear RAM
-  ld bc,$1f00 ; avoid killing the stack (should be empty)
-  ; I don't care about the port $3e value in ram at $c000
-  ld hl,$c000
-  ld de,$c001
-  ld a,0
-  ld (hl),a ; zero
-  ldir     ; propagate that through RAM
+    ; now I can assume uninitialised variables are zero.
 
-  ; now I can assume uninitialised variables are zero.
+    ; load tiles
+    ld de,$4000 ; tile index 0
+    ld hl,ArrowTiles
+    call zx7_decompress
 
-  ; load tiles
-  ld de,$4000 ; tile index 0
-  ld hl,ArrowTiles
-  call zx7_decompress
+    ld de,$4000+256*32 ; tile index 256
+    ld hl,SpriteTiles
+    call zx7_decompress
 
-  ld de,$4000+256*32 ; tile index 256
-  ld hl,SpriteTiles
-  call zx7_decompress
-
-  ; load palette
-  ld hl,GamePalette
-  ld de,ActualPalette
-  ld bc,32
-  ldir
+    ; load palette
+    ld hl,GamePalette
+    ld de,ActualPalette
+    ld bc,32
+    ldir
 
   pop af
   ld (Difficulty),a
@@ -268,21 +268,22 @@ main:
   ld hl,ButterflySteps ; todo one day: more tracks!
   ld a,(Difficulty)
   add a,a              ; add a*2 to hl
-  ld b,0
-  ld c,a
-  add hl,bc
-  ld c,(hl)
+  add a,l
+  ld l,a
+  jr nc,+
   inc hl
-  ld b,(hl)            ; bc = what's pointed to
-  push bc
-  pop hl               ; get it into hl
++:ld a,(hl)            ; read what's there into hl
+  inc hl
+  ld h,(hl)
+  ld l,a
 
+  ; read data in
   ld a,(hl)
   inc hl
   ld (FramesBetweenEvents),a
 
   srl a ; divide by 2 to get half a frame
-  ld (StepsFrameCounter),a ; so the current step pointer will update exactly halfway between steps
+  ld (StepsFrameCounter),a ; so the current step pointer will update exactly halfway between steps (must be an even number though!)
 
   ld a,0
   ld (FrameCounter),a
@@ -1790,147 +1791,88 @@ _MoreThan99:
 
 .section "Intro screens" free
 
+ShowScreenAndWait:
+  call ShowScreen
+  call WaitForButton
+  call FadePaletteOut
+  jp TurnOffScreen ; and ret
+
+ShowScreen:
+  ld ($ffff),a
+  ld l,(ix+0)
+  ld h,(ix+1)
+  ld de,$4000 ; tile index 0
+  call zx7_decompress
+  ld l,(ix+2)
+  ld h,(ix+3)
+  ld de,TileMapAddress
+  call zx7_decompress
+  ld l,(ix+4)
+  ld h,(ix+5)
+  ld de,ActualPalette
+  ld bc,16
+  ldir
+  call TurnOnScreen
+  jp FadePaletteIn ; and ret
+
 TitleScreen:
   call TurnOffScreen
 
   ; turn off sprites
   call NoSprites
+/*
+  ld a,:xiao
+  ld ix,xiao
+  call ShowScreenAndWait
 
-  ; load tiles
-  ld de,$4000 ; tile index 0
-  ld hl,xiaoTiles
-  call zx7_decompress
+  ld a,:bb2k4
+  ld ix,bb2k4
+  call ShowScreenAndWait
 
-  ; load tilemap
-  ld de,TileMapAddress
-  ld hl,xiaoTilemap
-  call zx7_decompress
+  ld a,:aka
+  ld ix,aka
+  call ShowScreenAndWait
 
-  ; load palette
-  ld hl,xiaoPalette
-  ld de,ActualPalette
-  ld bc,3
-  ldir
-
-  call TurnOnScreen
-  call FadePaletteIn
-  call WaitForButton
-  call FadePaletteOut
-  call TurnOffScreen
-
-  ld a,:BB2K4Tiles
-  ld ($ffff),a
-  ld de,$4000
-  ld hl,BB2K4Tiles
-  call zx7_decompress
-  ld de,TileMapAddress
-  ld hl,BB2K4Tilemap
-  call zx7_decompress
-  ld hl,BB2K4Palette
-  ld de,ActualPalette 
-  ld bc,32
-  ldir
-  call TurnOnScreen
-  call FadePaletteIn
-  call WaitForButton
-  call FadePaletteOut
-  call TurnOffScreen
-
+  ld a,:s3
+  ld ix,s3
+  call ShowScreenAndWait
   call AKA
 
-  ld de,$4000
-  ld hl,S3Tiles
-  call zx7_decompress
-  ld de,TileMapAddress
-  ld hl,S3Tilemap
-  call zx7_decompress
-  ld hl,S3Palette
-  ld de,ActualPalette
-  ld bc,32
-  ldir
-  call TurnOnScreen
-  call FadePaletteIn
-  call WaitForButton
-  call FadePaletteOut
-  call TurnOffScreen
+  ld a,:aka
+  ld ix,aka
+  call ShowScreenAndWait
 
-  call AKA
+  ld a,:sp8
+  ld ix,sp8
+  call ShowScreenAndWait
 
-  ld a,:sp8Tiles
-  ld ($ffff),a
-  ld de,$4000
-  ld hl,sp8Tiles
-  call zx7_decompress
-  ld de,TileMapAddress
-  ld hl,sp8Tilemap
-  call zx7_decompress
-  ld hl,sp8Palette
-  ld de,ActualPalette 
-  ld bc,32
-  ldir
-  call TurnOnScreen
-  call FadePaletteIn
-  call WaitForButton
-  call FadePaletteOut
-  call TurnOffScreen
+  ld a,:aka
+  ld ix,aka
+  call ShowScreenAndWait
 
-  call AKA
+  ld a,:cv3
+  ld ix,cv3
+  call ShowScreenAndWait
 
-  ld a,:CV3Tiles
-  ld ($ffff),a
-  ld de,$4000
-  ld hl,CV3Tiles
-  call zx7_decompress
-  ld de,TileMapAddress
-  ld hl,CV3Tilemap
-  call zx7_decompress
-  ld hl,CV3Palette
-  ld de,ActualPalette
-  ld bc,32
-  ldir
-  call TurnOnScreen
-  call FadePaletteIn
-  call WaitForButton
-  call FadePaletteOut
-  call TurnOffScreen
-
-  call AKA
-
-  ld de,$4000
-  ld hl,BBRTiles
-  call zx7_decompress
-  ld de,TileMapAddress
-  ld hl,BBRTilemap
-  call zx7_decompress
-  ld hl,BBRPalette
-  ld de,ActualPalette
-  ld bc,32
-  ldir
-  call TurnOnScreen
-  call FadePaletteIn
-  call WaitForButton
-  call FadePaletteOut
-  call TurnOffScreen
+  ld a,:aka
+  ld ix,aka
+  call ShowScreenAndWait
+*/
+  ld a,:bbr
+  ld ix,bbr
+  call ShowScreenAndWait
 
   ; difficulty select
 
-  ld de,$4000
-  ld hl,LSTiles
-  call zx7_decompress
-  ld de,TileMapAddress
-  ld hl,LSTilemap
-  call zx7_decompress
-  ld hl,LSPalette
-  ld de,ActualPalette
-  ld bc,32
-  ldir
-  call TurnOnScreen
-  call FadePaletteIn
+
+  ld a,:DifficultySelect
+  ld ix,DifficultySelect
+  call ShowScreen
 
   call HighlightDifficulty
   ld c,0 ; current difficulty
-LevelSelect:
 
+LevelSelect:
   ld a,c
   and 3
   ld c,a
@@ -2014,26 +1956,6 @@ HighlightDifficulty:
 +:ld (ix+3),cl333
 ++:
   ret
-
-
-AKA:
-  ld de,$4000
-  ld hl,akaTiles
-  call zx7_decompress
-  ld de,TileMapAddress
-  ld hl,akaTilemap
-  call zx7_decompress
-  ld hl,akaPalette
-  ld de,ActualPalette
-  ld bc,32
-  ldir
-  call TurnOnScreen
-  call FadePaletteIn
-  call WaitForButton
-  call FadePaletteOut
-  call TurnOffScreen
-  ret
-
 
 FadePaletteIn:
   ld a,0
@@ -2165,39 +2087,38 @@ FadePalette:
         jp nz,PaletteFadeLoop
         ++:
     ret
+.ends
 
+.section "xiao" superfree
+xiao:
+.dw +, ++, +++
++:   .incbin "backgrounds/xiao.png.tiles.zx7"
+++:  .incbin "backgrounds/xiao.png.tilemap.zx7"
++++: .incbin "backgrounds/xiao.png.palette.bin"
+.ends
 
+.section "aka" superfree
+aka:
+.dw +, ++, +++
++:   .incbin "backgrounds/aka.png.tiles.zx7"
+++:  .incbin "backgrounds/aka.png.tilemap.zx7"
++++: .incbin "backgrounds/aka.png.palette.bin"
+.ends
 
+.section "bbr" superfree
+bbr:
+.dw +, ++, +++
++:   .incbin "backgrounds/BBR.png.tiles.zx7"
+++:  .incbin "backgrounds/BBR.png.tilemap.zx7"
++++: .incbin "backgrounds/BBR.png.palette.bin"
+.ends
 
-
-xiaoTiles:
-.incbin "backgrounds/xiao.png.tiles.zx7"
-xiaoTilemap:
-.incbin "backgrounds/xiao.png.tilemap.zx7"
-akaPalette:
-xiaoPalette:
-.incbin "backgrounds/xiao.png.palette.bin"
-
-akaTiles:
-.incbin "backgrounds/aka.png.tiles.zx7"
-akaTilemap:
-.incbin "backgrounds/aka.png.tilemap.zx7"
-
-BBRTiles:
-.incbin "backgrounds/BBR.png.tiles.zx7"
-BBRTilemap:
-.incbin "backgrounds/BBR.png.tilemap.zx7"
-BBRPalette:
-.incbin "backgrounds/BBR.png.palette.bin"
-
-S3Tiles:
-.incbin "backgrounds/Shenmue 3.png.tiles.zx7"
-S3Tilemap:
-.incbin "backgrounds/Shenmue 3.png.tilemap.zx7"
-S3Palette:
-.incbin "backgrounds/Shenmue 3.png.palette.bin"
-
-
+.section "shenmue 3" superfree
+s3:
+.dw +, ++, +++
++:   .incbin "backgrounds/Shenmue 3.png.tiles.zx7"
+++:  .incbin "backgrounds/Shenmue 3.png.tilemap.zx7"
++++: .incbin "backgrounds/Shenmue 3.png.palette.bin"
 .ends
 
 .section "Song finished" free
@@ -2287,34 +2208,36 @@ ButterflyMusic:
 .ends
 
 .section "More GFX" superfree
-CV3Tiles:
-.incbin "backgrounds/CV3.png.tiles.zx7"
-CV3Tilemap:
-.incbin "backgrounds/CV3.png.tilemap.zx7"
-CV3Palette:
-.incbin "backgrounds/CV3.png.palette.bin"
+cv3:
+.dw +, ++, +++
++:   .incbin "backgrounds/CV3.png.tiles.zx7"
+++:  .incbin "backgrounds/CV3.png.tilemap.zx7"
++++: .incbin "backgrounds/CV3.png.palette.bin"
+.ends
 
-BB2K4Tiles:
-.incbin "backgrounds/BB2K4.png.tiles.zx7"
-BB2K4Tilemap:
-.incbin "backgrounds/BB2K4.png.tilemap.zx7"
-BB2K4Palette:
-.incbin "backgrounds/BB2K4.png.palette.bin"
+.section "bb2k4" superfree
+bb2k4:
+.dw +, ++, +++
++:   .incbin "backgrounds/BB2K4.png.tiles.zx7"
+++:  .incbin "backgrounds/BB2K4.png.tilemap.zx7"
++++: .incbin "backgrounds/BB2K4.png.palette.bin"
+.ends
 
-sp8Tiles:
-.incbin "backgrounds/sp8.png.tiles.zx7"
-sp8Tilemap:
-.incbin "backgrounds/sp8.png.tilemap.zx7"
-sp8Palette:
-.incbin "backgrounds/sp8.png.palette.bin"
+.section "SMS Power 8" superfree
+sp8:
+.dw +, ++, +++
++:   .incbin "backgrounds/sp8.png.tiles.zx7"
+++:  .incbin "backgrounds/sp8.png.tilemap.zx7"
++++: .incbin "backgrounds/sp8.png.palette.bin"
+.ends
 
-LSTiles:
-.incbin "backgrounds/levelselect.png.tiles.zx7"
-LSTilemap:
-.incbin "backgrounds/levelselect.png.tilemap.zx7"
-LSPalette:
-;.incbin "levelselect.png.palette.bin"
+.section "Dofficulty select" superfree
+DifficultySelect:
+.dw +, ++, +++
++:   .incbin "backgrounds/levelselect.png.tiles.zx7"
+++:  .incbin "backgrounds/levelselect.png.tilemap.zx7"
++++: ;.incbin "backgrounds/levelselect.png.palette.bin"
 ; Hack the palette as we tweak it for the menu selection
 .db $00 $15 $03 $3F $3F $3F
-
 .ends
+
