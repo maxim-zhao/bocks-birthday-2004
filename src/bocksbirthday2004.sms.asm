@@ -1,33 +1,33 @@
-F;.define AlwaysPerfect
+;.define AlwaysPerfect
+.define PSGLIB
 
 ;==============================================================
 ; WLA-DX banking setup
 ;==============================================================
 .memorymap
 defaultslot 0
-slotsize $7ff0
-slot 0 $0000
-slotsize $10
-slot 1 $7ff0
 slotsize $4000
+slot 0 $0000 ; ROM
+slot 1 $4000
 slot 2 $8000
+slotsize $2000
+slot 3 $c000 ; RAM
 .endme
 
 .rombankmap
-bankstotal 2
-banksize $7ff0
-banks 1
-banksize $10
-banks 1
-;banksize $4000
-;banks 1
+bankstotal 4
+banksize $4000
+banks 4 ; necessary to allow paging in Meka :( and also correct flashing on Everdrive :P
 .endro
 
 ;==============================================================
 ; RAM
 ;==============================================================
-.enum $c000 export
+.ramsection "Game RAM" slot 3
+.ifdef PSGLIB
+.else
 PSGMOD_START_ADDRESS dsb $100
+.endif
 SpriteTable          dsb $100 ; RAM copy of it
 NumSprites           db       ; how many sprites there are in it
 SpriteDirection      db       ; flip between 0 and 1 every frame for flickering
@@ -73,7 +73,7 @@ ComboTileLocation    dw
 
 VBlankHandler        dw ; so I can have different handlers
 
-.ende
+.ends
 
 .define End_Of_Step_Data $f0
 
@@ -99,10 +99,14 @@ SDSCNotes:
 .include "ZX7 decompressor.asm"
 .ends
 
+.ifdef PSGLIB
+.include "psglib.inc"
+.else
 .section "PSGMod stuff" free
 .include "psgmod.inc"
 .include "psgmod.asm"
 .ends
+.endif
 
 ;==============================================================
 ; Boot section
@@ -171,7 +175,11 @@ StepsActiveVBlank:
   ; stuff to do when steps are active
   call ProcessInputs
   call UpdateRating
+.ifdef PSGLIB
+  call PSGFrame
+.else
   call PSGMOD_Play ; sometimes takes ~3 lines
+.endif
   call SlideRating
   call UpdateScore
   ret
@@ -243,11 +251,18 @@ main:
   xor a
   ld (SpriteDirection),a
 
+.ifdef PSGLIB
+  call PSGInit
+.endif
+
   ld a,:ButterflyMusic
   ld hl,ButterflyMusic
+.ifdef PSGLIB
+  call PSGPlayNoRepeat
+.else
   call PSGMOD_LoadModule
-
   call PSGMOD_Start
+.endif
 
   ld hl,ButterflySteps ; todo one day: more tracks!
   ld a,(Difficulty)
@@ -356,7 +371,7 @@ main:
 
 
 ; All steps are fairly similar, obviously
-; The step patterns I downloaded (labelled with  "smile.dk" but that seems
+; The step patterns I downloaded (labelled with "smile.dk" but that seems
 ; to be something else now) are in the form
 ;
 ; I1 I2 A1 A2 B1 B2 C A1 A2 B1 B2 D1 D2
@@ -368,6 +383,12 @@ main:
 ; so I'm copying and pasting in the extra bits, although they'd be better if there
 ; was some original source instead since I'm approximating.
 ; I'm mapping I1 I2 I3 to I1 I1 I2.
+;
+; RushJet1's awesome VGM seems to be in the form
+;
+; I1 I2 I3 A1 A2 B1 B2 C A1 A2 B1 B2 D1 D2 + outro?
+;
+; so I will truncate the steps again for that.
 
 .section "steps" free
 ButterflySteps:
@@ -389,12 +410,14 @@ ButterflyStepsLevel1:
 .db 0,R,0,R,0,L,0,L,0,R,0,R,0,L,0,L ; C
 .db 0,0,R,R,0,0,L,L,0,R,0,L,0,0,R,R ; A1
 .db 0,0,L,L,0,0,R,R,0,L,0,R,0,0,L,L ; A2
+; /*
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,0,L ; B1
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,L,0 ; B2
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,U,0,L ; D1
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,D,0,R ; D2
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,0,L ; B1
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,L,0 ; B2
+; */
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,0,L ; B1
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,L,0 ; B2
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,U,0,L ; D1
@@ -1821,7 +1844,7 @@ TitleScreen:
 
   ; turn off sprites
   call NoSprites
-/*
+
   ld a,:xiao
   ld ix,xiao
   call ShowScreenAndWait
@@ -1837,7 +1860,6 @@ TitleScreen:
   ld a,:s3
   ld ix,s3
   call ShowScreenAndWait
-  call AKA
 
   ld a,:aka
   ld ix,aka
@@ -1858,7 +1880,7 @@ TitleScreen:
   ld a,:aka
   ld ix,aka
   call ShowScreenAndWait
-*/
+
   ld a,:bbr
   ld ix,bbr
   call ShowScreenAndWait
@@ -1984,12 +2006,12 @@ TurnOnScreen:
 
 
 ; Palette fader from 2002
+; TODO: make it use the colourful fader from Phantasy Star?
 
-.define PaletteFadeRAM ActualPalette
 PaletteFadeLookup:
 .db 0,0,0,0
-.db 0,0,0,1
-.db 0,0,1,2
+.db 0,0,1,1
+.db 0,1,1,2
 .db 0,1,2,3
 
 AdjustColour:   ; pass colour in a, amount<<2 in b; returns adjusted colour in a, b unaffected
@@ -2007,7 +2029,7 @@ FadePalette:
 
     ; Initial multiplication value:
     ld b,%0000  ; Zero, unless a!=0
-    ld a,(PaletteFadeRAM+$20)
+    ld a,(ActualPalette+$20)
     cp 0
     jp z,+
     ld b,%1000
@@ -2016,7 +2038,7 @@ FadePalette:
     PaletteFadeLoop:
     ; Copy palette using lookup to fade colours in
         ld c,16 ; 16 palette entries to process
-        ld ix,PaletteFadeRAM ; original palette and offset to new one
+        ld ix,ActualPalette ; original palette and offset to new one
         AdjustColourAtIX:
             push bc
             ld a,(ix+0)     ; red
@@ -2053,7 +2075,7 @@ FadePalette:
             jr nz,AdjustColourAtIX
 
         ; Full palette fade done in RAM, now load it
-        ld hl,PaletteFadeRAM+$10
+        ld hl,ActualPalette+$10
         push bc
             ld b,16
             ld c,0
@@ -2068,7 +2090,7 @@ FadePalette:
             call WaitForCFrames
         pop bc
         ; Are we fading in or out?
-        ld a,(PaletteFadeRAM+$20)
+        ld a,(ActualPalette+$20)
         cp 0
         jp z,+
         ; FadeToBlack=1
@@ -2090,44 +2112,16 @@ FadePalette:
     ret
 .ends
 
-.section "xiao" superfree
-xiao:
-.dw +, ++, +++
-+:   .incbin "backgrounds/xiao.png.tiles.zx7"
-++:  .incbin "backgrounds/xiao.png.tilemap.zx7"
-+++: .incbin "backgrounds/xiao.png.palette.bin"
-.ends
-
-.section "aka" superfree
-aka:
-.dw +, ++, +++
-+:   .incbin "backgrounds/aka.png.tiles.zx7"
-++:  .incbin "backgrounds/aka.png.tilemap.zx7"
-+++: .incbin "backgrounds/aka.png.palette.bin"
-.ends
-
-.section "bbr" superfree
-bbr:
-.dw +, ++, +++
-+:   .incbin "backgrounds/BBR.png.tiles.zx7"
-++:  .incbin "backgrounds/BBR.png.tilemap.zx7"
-+++: .incbin "backgrounds/BBR.png.palette.bin"
-.ends
-
-.section "shenmue 3" superfree
-s3:
-.dw +, ++, +++
-+:   .incbin "backgrounds/Shenmue 3.png.tiles.zx7"
-++:  .incbin "backgrounds/Shenmue 3.png.tilemap.zx7"
-+++: .incbin "backgrounds/Shenmue 3.png.palette.bin"
-.ends
-
 .section "Song finished" free
 SongFinished:
 
   di
 
+.ifdef PSGLIB
+  call PSGStop
+.else
   call PSGMOD_Stop
+.endif
 
   ; Turn screen off
   ld a,%10100101
@@ -2201,9 +2195,47 @@ WaitForButton:
     ret
 .ends
 
+.slot 2 ; for superfree sections
+
+.section "xiao" superfree
+xiao:
+.dw +, ++, +++
++:   .incbin "backgrounds/xiao.png.tiles.zx7"
+++:  .incbin "backgrounds/xiao.png.tilemap.zx7"
++++: .incbin "backgrounds/xiao.png.palette.bin"
+.ends
+
+.section "aka" superfree
+aka:
+.dw +, ++, +++
++:   .incbin "backgrounds/aka.png.tiles.zx7"
+++:  .incbin "backgrounds/aka.png.tilemap.zx7"
++++: .incbin "backgrounds/aka.png.palette.bin"
+.ends
+
+.section "bbr" superfree
+bbr:
+.dw +, ++, +++
++:   .incbin "backgrounds/BBR.png.tiles.zx7"
+++:  .incbin "backgrounds/BBR.png.tilemap.zx7"
++++: .incbin "backgrounds/BBR.png.palette.bin"
+.ends
+
+.section "shenmue 3" superfree
+s3:
+.dw +, ++, +++
++:   .incbin "backgrounds/Shenmue 3.png.tiles.zx7"
+++:  .incbin "backgrounds/Shenmue 3.png.tilemap.zx7"
++++: .incbin "backgrounds/Shenmue 3.png.palette.bin"
+.ends
+
 .section "music" superfree
 ButterflyMusic:
+.ifdef PSGLIB
+.incbin "music/bf_rj1_edit.psg"
+.else
 .incbin "butterfly.epsgmod"
+.endif
 .ends
 
 .section "More GFX" superfree
