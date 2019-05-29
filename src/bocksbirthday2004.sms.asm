@@ -2024,12 +2024,12 @@ AdjustColour:   ; pass colour in a, amount<<2 in b; returns adjusted colour in a
     ret
 
 FadePalette:
-    ; Load $C000-$C00f with palette
-    ; Set $C020 to 1 to fade to black, 0 to fade from black
+    ; Load ActualPalette with palette
+    ; Set FadeDirection to 1 to fade to black, 0 to fade from black
 
     ; Initial multiplication value:
-    ld b,%0000  ; Zero, unless a!=0
-    ld a,(ActualPalette+$20)
+    ld b,%0000  ; Zero, unless FadeDirection!=0
+    ld a,(FadeDirection)
     cp 0
     jp z,+
     ld b,%1000
@@ -2090,7 +2090,7 @@ FadePalette:
             call WaitForCFrames
         pop bc
         ; Are we fading in or out?
-        ld a,(ActualPalette+$20)
+        ld a,(FadeDirection)
         cp 0
         jp z,+
         ; FadeToBlack=1
