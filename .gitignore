@@ -4,3 +4,5 @@ Thumbs.db
 *.sym
 /src/psmplayer
 /src/mod2psg2
+*.wav
+*.mp4
