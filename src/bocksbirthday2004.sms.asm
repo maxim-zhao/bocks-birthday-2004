@@ -1385,6 +1385,7 @@ CalculateRating:
   neg ; if so, negate it
 +:
 
+.ifdef DEBUG
   ; debug: save stuff in RAM where I can see it
   push af
     ld ($d010),a
@@ -1393,6 +1394,7 @@ CalculateRating:
     ld a,(StepsFrameCounter)
     ld ($d021),a
   pop af
+.endif
 
   ; how close?
   ; 0 or 1: perfect (I am generous)
