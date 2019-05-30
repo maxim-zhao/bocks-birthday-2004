@@ -169,6 +169,9 @@ StepsActiveVBlank:
   call PSGFrame
   call SlideRating
   call UpdateScore
+  call PSGGetStatus
+  or a
+  jp z,SongFinished
   ret
 .ends
 
