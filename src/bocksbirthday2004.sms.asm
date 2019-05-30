@@ -7,18 +7,19 @@
 ;==============================================================
 .memorymap
 defaultslot 0
-slotsize $4000
-slot 0 $0000 ; ROM
-slot 1 $4000
-slot 2 $8000
+slotsize $7fe0
+slot 0 $0000 ; ROM - no banks
+slotsize $0010
+slot 1 $7fe0 ; Headers act to pad the slot numbers so RAM is in slot 3
+slot 2 $7ff0
 slotsize $2000
 slot 3 $c000 ; RAM
 .endme
 
 .rombankmap
-bankstotal 4
-banksize $4000
-banks 4 ; necessary to allow paging in Meka :( and also correct flashing on Everdrive :P
+bankstotal 1
+banksize $7fe0
+banks 1
 .endro
 
 ;==============================================================
@@ -79,11 +80,10 @@ VBlankHandler        dw ; so I can have different handlers
 ;==============================================================
 ; SDSC tag and SMS rom header
 ;==============================================================
-.sdsctag 1.01,"Bock's Birthday 2004",SDSCNotes,"Maxim"
+.sdsctag 1.1,"Bock's Birthday 2004",SDSCNotes,"Maxim"
 .section "Notes" free
 SDSCNotes:
-.db "Alternative titles:",13,"- Shenmue 3",13,"- SMSPower 8",13,"- Copyright Violation Episode III",13,"- Bock Bock Revolution",13,13,13,"Happy birthday Omar!",13,13
-.db "Press the button!"
+.db "https://github.com/maxim-zhao/bocks-birthday-2004"
 .db 0
 .ends
 
@@ -105,7 +105,7 @@ SDSCNotes:
 .section "Boot section" force
   di        ; disable interrupts
   im 1      ; Interrupt mode 1
-  jp main     ; jump to main program
+  jp main   ; jump to main program
 .ends
 
 ;==============================================================
@@ -124,7 +124,6 @@ CallHL:
 .ends
 
 .section "Game VBlank handler" free
-.define DebugTiming
 .macro DebugColour args colour
 .ifdef DebugTiming
   ld a,colour|$f0
@@ -186,7 +185,8 @@ StepsActiveVBlank:
 .section "Main program" free
 main:
   ld sp, $dff0
-  
+
+  ; Initialise mapper state
   xor a
   ld ($fffc),a
   ld ($fffd),a
@@ -1807,7 +1807,6 @@ ShowScreenAndWait:
   jp TurnOffScreen ; and ret
 
 ShowScreen:
-  ld ($ffff),a
   ld l,(ix+0)
   ld h,(ix+1)
   ld de,$4000 ; tile index 0
@@ -1830,50 +1829,38 @@ TitleScreen:
   ; turn off sprites
   call NoSprites
 
-  ld a,:xiao
   ld ix,xiao
   call ShowScreenAndWait
 
-  ld a,:bb2k4
   ld ix,bb2k4
   call ShowScreenAndWait
-
-  ld a,:aka
+/*
   ld ix,aka
   call ShowScreenAndWait
 
-  ld a,:s3
   ld ix,s3
   call ShowScreenAndWait
 
-  ld a,:aka
   ld ix,aka
   call ShowScreenAndWait
 
-  ld a,:sp8
   ld ix,sp8
   call ShowScreenAndWait
 
-  ld a,:aka
   ld ix,aka
   call ShowScreenAndWait
 
-  ld a,:cv3
   ld ix,cv3
   call ShowScreenAndWait
 
-  ld a,:aka
   ld ix,aka
   call ShowScreenAndWait
-
-  ld a,:bbr
+*/
   ld ix,bbr
   call ShowScreenAndWait
 
   ; difficulty select
 
-
-  ld a,:DifficultySelect
   ld ix,DifficultySelect
   call ShowScreen
 
@@ -2176,9 +2163,7 @@ WaitForButton:
     ret
 .ends
 
-.slot 2 ; for superfree sections
-
-.section "xiao" superfree
+.section "xiao" free
 xiao:
 .dw +, ++, +++
 +:   .incbin "backgrounds/xiao.png.tiles.zx7"
@@ -2186,7 +2171,7 @@ xiao:
 +++: .incbin "backgrounds/xiao.png.palette.bin"
 .ends
 
-.section "aka" superfree
+.section "aka" free
 aka:
 .dw +, ++, +++
 +:   .incbin "backgrounds/aka.png.tiles.zx7"
@@ -2194,7 +2179,7 @@ aka:
 +++: .incbin "backgrounds/aka.png.palette.bin"
 .ends
 
-.section "bbr" superfree
+.section "bbr" free
 bbr:
 .dw +, ++, +++
 +:   .incbin "backgrounds/BBR.png.tiles.zx7"
@@ -2202,7 +2187,7 @@ bbr:
 +++: .incbin "backgrounds/BBR.png.palette.bin"
 .ends
 
-.section "shenmue 3" superfree
+.section "shenmue 3" free
 s3:
 .dw +, ++, +++
 +:   .incbin "backgrounds/Shenmue 3.png.tiles.zx7"
@@ -2210,12 +2195,12 @@ s3:
 +++: .incbin "backgrounds/Shenmue 3.png.palette.bin"
 .ends
 
-.section "music" superfree
+.section "music" free
 ButterflyMusic:
 .incbin "music/bf_rj1_edit.psg"
 .ends
 
-.section "More GFX" superfree
+.section "More GFX" free
 cv3:
 .dw +, ++, +++
 +:   .incbin "backgrounds/CV3.png.tiles.zx7"
@@ -2223,7 +2208,7 @@ cv3:
 +++: .incbin "backgrounds/CV3.png.palette.bin"
 .ends
 
-.section "bb2k4" superfree
+.section "bb2k4" free
 bb2k4:
 .dw +, ++, +++
 +:   .incbin "backgrounds/BB2K4.png.tiles.zx7"
@@ -2231,7 +2216,7 @@ bb2k4:
 +++: .incbin "backgrounds/BB2K4.png.palette.bin"
 .ends
 
-.section "SMS Power 8" superfree
+.section "SMS Power 8" free
 sp8:
 .dw +, ++, +++
 +:   .incbin "backgrounds/sp8.png.tiles.zx7"
@@ -2239,7 +2224,7 @@ sp8:
 +++: .incbin "backgrounds/sp8.png.palette.bin"
 .ends
 
-.section "Dofficulty select" superfree
+.section "Dofficulty select" free
 DifficultySelect:
 .dw +, ++, +++
 +:   .incbin "backgrounds/levelselect.png.tiles.zx7"

@@ -176,51 +176,6 @@ that way, and you are less of a spectacle.
 
 - Remember, Good ratings are OK but they're not Good for your combo length.
 
-## Alternative titles
-
-### Shenmue 3:
-  While I was working on it back in November 2004, Bock was trying to find out
-  about it; he jokingly guessed that it might be Shenmue 3, so of course I had
-  to make sure it was, even if in name only.
-
-### SMSPower 8:
-  Since it became a dual-purpose demo for SMS Power's 8th birthday, I "borrowed"
-  the title of Heliophobe's demo for the 7th birthday, continuing a fine
-  tradition of incestuous content-copying within the SMS demo scene.
-
-### Copyright Violation Episode III:
-  Heliophobe wrote Copyright Violation in 2002 for the SMS Power Rush Coding
-  Competition #1 (not that anyone's recovered enough for #2 yet). Bock's
-  Birthday 2003 was so full of other people's intellectual property that it was
-  sub-titled Copyright Violation Episode II. So I may as well make this one
-  Episode III: The Rise of the Arrows, for which I am eternally grateful to
-  George Lucas for unknowingly choosing a subtitle for his crappy space-western
-  movie in which a single word change makes it exactly describe this demo.
-
-### Bock Bock Revolution:
-  Well, it is a Dance Dance Revolution clone after all. Full credit goes to
-  Chris Covell for breaking open the vault of DPaint to convert my 24-bit
-  original logo into a pixellated masterpiece (which, incidentally, looks even
-  better on a real TV).
-
-
-## Things you may have missed
-
-### "xiao presents"
-
-Nothing I ever do is without her support, criticism and interruptions :) She may
-not like having her name drawn 150 pixels high throughout but I think it looks
-cool.
-
-### "Press the button!"
-
-Maybe someone is still sitting there looking at the "xiao presents" screen,
-waiting for something to happen. How silly that would be!
-
-### "This is not a real scroller"
-
-Honesty is the best policy.
-
 
 ## The Making of Bock's Birthday 2004
 
