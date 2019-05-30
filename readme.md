@@ -413,6 +413,20 @@ it properly for the first time since the previous afternoon's breakthrough into
 actual gameplay. It almost seemed worth it :)
 
 
+## Epilogue
+
+A short time after the release I put out [a request for better/more music](http://www.smspower.org/forums/9257-BockBockRevolutionMusic?highlight=butterfly).
+I got one amazing response from RushJet1 - a long-time PSG tracker/composer 
+deity - and I said "I commit 100% to putting out an updated version of my game".
+
+Just over eleven years later, I was working through my old SMS code to put it on
+GitHub and my conscience caught up with me. I took some time to convert a few 
+things to some more modern standards (ZX7 for art compression, PSGLib for the music 
+engine), tweaked a few things (shortened the long intro, moved the arrows to the 
+middle of the screen), fixed a few bugs (if the previous version hadn't crashed a 
+real system it would have garbled the graphics), dropped the new music in and here
+we are.
+
 ## Final words:
 
 1. Happy birthday Omar!
