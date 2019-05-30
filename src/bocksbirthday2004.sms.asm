@@ -1866,8 +1866,7 @@ TitleScreen:
   ld ix,DifficultySelect
   call ShowScreen
 
-  call HighlightDifficulty
-  ld c,0 ; current difficulty
+  ld c,2 ; current difficulty
 
 LevelSelect:
   ld a,c
@@ -2194,12 +2193,13 @@ bb2k4:
 +++: .incbin "backgrounds/BB2K4.png.palette.bin"
 .ends
 
+.section "Difficulty select" free
 DifficultySelect:
 .dw +, ++, +++
 +:   .incbin "backgrounds/levelselect.png.tiles.zx7"
 ++:  .incbin "backgrounds/levelselect.png.tilemap.zx7"
 +++: ;.incbin "backgrounds/levelselect.png.palette.bin"
 ; Hack the palette as we tweak it for the menu selection
-.db $00 $15 $03 $3F $3F $3F
+.db $00 $15 $3F $3F $03 $3F
 .ends
 
