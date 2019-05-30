@@ -1,6 +1,6 @@
-;.define AlwaysPerfect
-.define PSGLIB
-.define OffsetArrows 3
+;.define AlwaysPerfect ; Used to find the maximum scores
+.define OffsetArrows 3 ; I originally placed all the artwork by hand, rather than edit a bunch of numbers this lets me apply a modifier to them.
+.define DebugTiming ; If defined, we change the border colour during VBlank to measure how long different functions take
 
 ;==============================================================
 ; WLA-DX banking setup
@@ -25,10 +25,6 @@ banks 4 ; necessary to allow paging in Meka :( and also correct flashing on Ever
 ; RAM
 ;==============================================================
 .ramsection "Game RAM" slot 3
-.ifdef PSGLIB
-.else
-PSGMOD_START_ADDRESS dsb $100
-.endif
 SpriteTable          dsb $100 ; RAM copy of it
 NumSprites           db       ; how many sprites there are in it
 SpriteDirection      db       ; flip between 0 and 1 every frame for flickering
@@ -100,14 +96,7 @@ SDSCNotes:
 .include "ZX7 decompressor.asm"
 .ends
 
-.ifdef PSGLIB
 .include "psglib.inc"
-.else
-.section "PSGMod stuff" free
-.include "psgmod.inc"
-.include "psgmod.asm"
-.ends
-.endif
 
 ;==============================================================
 ; Boot section
@@ -176,11 +165,7 @@ StepsActiveVBlank:
   ; stuff to do when steps are active
   call ProcessInputs
   call UpdateRating
-.ifdef PSGLIB
   call PSGFrame
-.else
-  call PSGMOD_Play ; sometimes takes ~3 lines
-.endif
   call SlideRating
   call UpdateScore
   ret
@@ -252,18 +237,10 @@ main:
   xor a
   ld (SpriteDirection),a
 
-.ifdef PSGLIB
   call PSGInit
-.endif
 
-  ld a,:ButterflyMusic
   ld hl,ButterflyMusic
-.ifdef PSGLIB
   call PSGPlayNoRepeat
-.else
-  call PSGMOD_LoadModule
-  call PSGMOD_Start
-.endif
 
   ld hl,ButterflySteps ; todo one day: more tracks!
   ld a,(Difficulty)
@@ -2125,11 +2102,7 @@ SongFinished:
 
   di
 
-.ifdef PSGLIB
   call PSGStop
-.else
-  call PSGMOD_Stop
-.endif
 
   ; Turn screen off
   ld a,%10100101
@@ -2239,11 +2212,7 @@ s3:
 
 .section "music" superfree
 ButterflyMusic:
-.ifdef PSGLIB
 .incbin "music/bf_rj1_edit.psg"
-.else
-.incbin "butterfly.epsgmod"
-.endif
 .ends
 
 .section "More GFX" superfree
