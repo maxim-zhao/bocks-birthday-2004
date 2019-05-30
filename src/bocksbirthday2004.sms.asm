@@ -123,6 +123,8 @@ CallHL:
   jp (hl)
 .ends
 
+.org 0
+
 .section "Game VBlank handler" free
 .macro DebugColour args colour
 .ifdef DebugTiming
@@ -2171,14 +2173,6 @@ xiao:
 +++: .incbin "backgrounds/xiao.png.palette.bin"
 .ends
 
-.section "aka" free
-aka:
-.dw +, ++, +++
-+:   .incbin "backgrounds/aka.png.tiles.zx7"
-++:  .incbin "backgrounds/aka.png.tilemap.zx7"
-+++: .incbin "backgrounds/aka.png.palette.bin"
-.ends
-
 .section "bbr" free
 bbr:
 .dw +, ++, +++
@@ -2187,25 +2181,9 @@ bbr:
 +++: .incbin "backgrounds/BBR.png.palette.bin"
 .ends
 
-.section "shenmue 3" free
-s3:
-.dw +, ++, +++
-+:   .incbin "backgrounds/Shenmue 3.png.tiles.zx7"
-++:  .incbin "backgrounds/Shenmue 3.png.tilemap.zx7"
-+++: .incbin "backgrounds/Shenmue 3.png.palette.bin"
-.ends
-
 .section "music" free
 ButterflyMusic:
 .incbin "music/bf_rj1_edit.psg"
-.ends
-
-.section "More GFX" free
-cv3:
-.dw +, ++, +++
-+:   .incbin "backgrounds/CV3.png.tiles.zx7"
-++:  .incbin "backgrounds/CV3.png.tilemap.zx7"
-+++: .incbin "backgrounds/CV3.png.palette.bin"
 .ends
 
 .section "bb2k4" free
@@ -2216,15 +2194,6 @@ bb2k4:
 +++: .incbin "backgrounds/BB2K4.png.palette.bin"
 .ends
 
-.section "SMS Power 8" free
-sp8:
-.dw +, ++, +++
-+:   .incbin "backgrounds/sp8.png.tiles.zx7"
-++:  .incbin "backgrounds/sp8.png.tilemap.zx7"
-+++: .incbin "backgrounds/sp8.png.palette.bin"
-.ends
-
-.section "Dofficulty select" free
 DifficultySelect:
 .dw +, ++, +++
 +:   .incbin "backgrounds/levelselect.png.tiles.zx7"
