@@ -1,5 +1,6 @@
 ;.define AlwaysPerfect
 .define PSGLIB
+.define OffsetArrows 3
 
 ;==============================================================
 ; WLA-DX banking setup
@@ -885,7 +886,7 @@ _lessthan28:
   rr a         ;
   ld h,b       ; hl = b*64
   ld l,a
-  ld bc,(TileMapAddress-$4000)+2*2  ; draw from 2 tiles from the left
+  ld bc,(TileMapAddress-$4000)+2*(2+OffsetArrows)  ; draw from 2 tiles from the left
   add hl,bc
   ; hl now holds the VRAM address to draw at
   ret
@@ -1074,31 +1075,31 @@ Ratings:
 
 RatingPerfect:
 .db 22 ; number of sprites
-.db 20 ; starting x value
+.db OffsetArrows*8+20 ; starting x value
 .db $21,$22,$23,$24,$25,$26,$27,$28,$29,$2a,$2b,0 ; tile numbers - 0 signals end-of-row
 .db $2c,$2d,$2e,$2f,$30,$31,$32,$33,$34,$35,$36
 .db cl030,cl020,cl010,cl020 ; palette (4 colours)
 
 RatingGreat:
-.db 18,40
+.db 18,OffsetArrows*8+40
 .db $37,$38,$39,$3a,$3b,$3c,$3d,$3e,$3f,0
 .db $40,$41,$42,$43,$44,$45,$46,$47,$48
 .db cl033,cl032,cl031,cl032
 
 RatingGood:
-.db 14,58
+.db 14,OffsetArrows*8+58
 .db $49,$4a,$4b,$4c,$4d,$4e,$4f,0
 .db $50,$51,$52,$53,$54,$55,$56
 .db cl021,cl221,cl330,cl221
 
 RatingBoo:
-.db 10,68
+.db 10,OffsetArrows*8+68
 .db $57,$58,$59,$5a,$5b,0
 .db $5c,$5d,$5e,$5f,$60
 .db cl100,cl200,cl300,cl200
 
 RatingMiss:
-.db 14,57
+.db 14,OffsetArrows*8+57
 .db $61,$62,$63,$64,$65,$66,$67,0
 .db $68,$69,$6a,$6b,$6c,$6d,$6e
 .db cl300,cl201,cl000,cl302
@@ -1208,6 +1209,7 @@ LoadArrowSprites:
   ret
 
 SpriteData:
+.define X OffsetArrows*8
 ; very lazy method: raw VRAM data
 ; y positions
 .db  8, 8, 8,  9, 9, 9,  9, 9, 9,  8, 8, 8 ; 12
@@ -1217,10 +1219,10 @@ SpriteData:
 ; unused section
 .dsb 64,0
 ; x positions/tile indices
-.db 18,$01,34,$02,50,$03, 65,$04,81,$05,97,$06, 113,$07,129,$08,145,$09, 162,$0a,178,$0b,194,$0c
-.db 18,$0d,34,$0e,50,$0f, 65,$10,81,$11,97,$12, 113,$13,129,$14,145,$15, 162,$16,178,$17,194,$18
-.db 18,$19,34,$1a,        65,$1b,81,$1c,        113,$1d,129,$1e,         162,$1f,178,$20,194
-
+.db X+18,$01,X+34,$02,X+50,$03, X+65,$04,X+81,$05,X+97,$06, X+113,$07,X+129,$08,X+145,$09, X+162,$0a,X+178,$0b,X+194,$0c
+.db X+18,$0d,X+34,$0e,X+50,$0f, X+65,$10,X+81,$11,X+97,$12, X+113,$13,X+129,$14,X+145,$15, X+162,$16,X+178,$17,X+194,$18
+.db X+18,$19,X+34,$1a,          X+65,$1b,X+81,$1c,          X+113,$1d,X+129,$1e,           X+162,$1f,X+178,$20
+.undef X
 .ends
 
 .section "Input testing" free
