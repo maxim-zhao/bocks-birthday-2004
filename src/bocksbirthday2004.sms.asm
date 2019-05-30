@@ -148,7 +148,7 @@ CallHL:
   ; stuff that has to happen first
 GameVBlankHandler:
   DebugColour 1
-  call ScrollAndManageArrows
+  call ScrollAndManageArrows ; sometimes slow
   DebugColour 2
   call GetInputs
   ; Stuff that has to happen in the VBlank, and timing-sensitive
@@ -158,7 +158,7 @@ GameVBlankHandler:
   DebugColour 4
   call UpdatePalette
   DebugColour 5
-  call OutputSpriteTable
+  call OutputSpriteTable ; always slow
   DebugColour 6
   ; Everything else that can overflow into the active display period without breaking
   ; count down StepLagTime
@@ -411,18 +411,18 @@ ButterflyStepsLevel1:
 .db 0,R,0,R,0,L,0,L,0,R,0,R,0,L,0,L ; C
 .db 0,0,R,R,0,0,L,L,0,R,0,L,0,0,R,R ; A1
 .db 0,0,L,L,0,0,R,R,0,L,0,R,0,0,L,L ; A2
-; /*
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,0,L ; B1
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,L,0 ; B2
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,U,0,L ; D1
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,D,0,R ; D2
+/*
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,0,L ; B1
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,L,0 ; B2
-; */
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,0,L ; B1
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,L,0 ; B2
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,U,0,L ; D1
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,D,0,R ; D2
+*/
 .db end
 ButterflyStepsLevel2:
 .db 24 ; frames between events
@@ -445,12 +445,14 @@ ButterflyStepsLevel2:
 .db 0,U,U,X,R,U,L,D,U,D,R,0,L,R,U,D ; B2
 .db 0,D,R,D,L,D,R,D,L,D,R,D,L,U,D,X ; D1
 .db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
+/*
 .db 0,U,U,X,R,U,L,D,U,D,L,0,R,L,D,U ; B1
 .db 0,U,U,X,R,U,L,D,U,D,R,0,L,R,U,D ; B2
 .db 0,U,U,X,R,U,L,D,U,D,L,0,R,L,D,U ; B1
 .db 0,U,U,X,R,U,L,D,U,D,R,0,L,R,U,D ; B2
 .db 0,D,R,D,L,D,R,D,L,D,R,D,L,U,D,X ; D1
 .db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
+*/
 .db end
 ButterflyStepsLevel3:
 .db 24 ; frames between events
@@ -473,12 +475,14 @@ ButterflyStepsLevel3:
 .db 0,U,U,X,R,E,L,Z,U,D,C,0,L,R,U,Z ; B2
 .db 0,D,R,D,L,D,R,D,L,D,R,D,L,U,D,X ; D1
 .db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
+/*
 .db 0,U,U,X,R,E,L,Z,U,D,Z,0,R,L,D,E ; B1
 .db 0,U,U,X,R,E,L,Z,U,D,C,0,L,R,U,Z ; B2
 .db 0,U,U,X,R,E,L,Z,U,D,Z,0,R,L,D,E ; B1
 .db 0,U,U,X,R,E,L,Z,U,D,C,0,L,R,U,Z ; B2
 .db 0,D,R,D,L,D,R,D,L,D,R,D,L,U,D,X ; D1
 .db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
+*/
 .db end
 ButterflyStepsLevel4:
 ; debugging data:
@@ -502,12 +506,14 @@ ButterflyStepsLevel4:
 .db U,0,U,0,X,0,R,D,U,0,Q,0,C,0,0,0,L,0,D,0,R,U,L,0,D,0,R,0,L,0,R,L ; B2
 .db X,0,U,0,R,0,U,R,U,0,L,0,U,0,L,U,R,0,U,0,R,0,U,R,D,0,L,0,R,0,L,R ; D1
 .db X,0,D,0,L,0,D,L,D,0,R,0,D,0,R,D,L,0,D,0,L,0,D,L,U,0,R,0,L,0,X,0 ; D2
+/*
 .db X,0,U,0,X,0,L,D,U,0,E,0,Z,0,0,0,R,0,D,0,L,U,R,0,D,0,L,0,R,0,D,L ; B1
 .db U,0,U,0,X,0,R,D,U,0,Q,0,C,0,0,0,L,0,D,0,R,U,L,0,D,0,R,0,L,0,R,L ; B2
 .db X,0,U,0,X,0,L,D,U,0,E,0,Z,0,0,0,R,0,D,0,L,U,R,0,D,0,L,0,R,0,D,L ; B1
 .db U,0,U,0,X,0,R,D,U,0,Q,0,C,0,0,0,L,0,D,0,R,U,L,0,D,0,R,0,L,0,R,L ; B2
 .db X,0,U,0,R,0,U,R,U,0,L,0,U,0,L,U,R,0,U,0,R,0,U,R,D,0,L,0,R,0,L,R ; D1
 .db X,0,D,0,L,0,D,L,D,0,R,0,D,0,R,D,L,0,D,0,L,0,D,L,U,0,R,0,L,0,X,0 ; D2
+*/
 .db end
 
 ScrollTable1240: ; scroll 40 lines in 12 frames
