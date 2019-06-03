@@ -68,6 +68,7 @@ ScoreLow             dw ; score (divided by 100) low word
 ScoreTileLocation    dw
 ComboTileLocation    dw
 
+SongEndPauseCounter  db ; Counter for the end of the song
 
 VBlankHandler        dw ; so I can have different handlers
 
@@ -171,8 +172,12 @@ StepsActiveVBlank:
   call UpdateScore
   call PSGGetStatus
   or a
-  jp z,SongFinished
-  ret
+  ret nz
+  ; Count down some time before we finish
+  ld hl, SongEndPauseCounter
+  dec (hl)
+  ret nz
+  jp SongFinished
 .ends
 
 ;==============================================================
@@ -312,6 +317,9 @@ main:
 
   ld a,60 ; TODO :change this?
   ld (RatingLength),a
+  
+  ld a,0
+  ld (SongEndPauseCounter),a
 
   ld hl,GameVBlankHandler
   ld (VBlankHandler),hl
@@ -2095,7 +2103,7 @@ SongFinished:
 
   di
 
-  call PSGStop
+  call FadePaletteOut ; TODO: fade sprite palette
 
   ; Turn screen off
   ld a,%10100101
