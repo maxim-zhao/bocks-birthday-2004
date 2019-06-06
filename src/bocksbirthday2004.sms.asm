@@ -1,4 +1,4 @@
-;.define AlwaysPerfect ; Used to find the maximum scores
+.define AlwaysPerfect ; Used to find the maximum scores
 .define OffsetArrows 3 ; I originally placed all the artwork by hand, rather than edit a bunch of numbers this lets me apply a modifier to them.
 .define DebugTiming ; If defined, we change the border colour during VBlank to measure how long different functions take
 
@@ -26,7 +26,7 @@ banks 1
 ; RAM
 ;==============================================================
 .ramsection "Game RAM" slot 3
-SpriteTable          dsb $100 ; RAM copy of it
+SpriteTable          dsb $100 ; RAM copy of the sprite table
 NumSprites           db       ; how many sprites there are in it
 SpriteDirection      db       ; flip between 0 and 1 every frame for flickering
 ActualPalette        dsb 32
@@ -41,8 +41,9 @@ Difficulty           db ; which level we're at, 0-3
 FramesBetweenEvents  db ; how many frames between step events
 FrameCounter         db ; index into FrameCountArray, counts 0..FramesBetweenEvents-1
 FrameCountArray      dw ; pointer to an array of delta scroll values for each frame
-LastDrawnArrows      db ; a copy of the last drawn data
-AmountScrolledThisInterval db ; total amount scrolled since the start of the current event interval
+LastDrawnArrows      db ; a copy of the last drawn data ; TODO don't need this?
+FineScroll           db ; Amount of fine scroll. Used to detect when it's time to draw a new row of tiles.
+ArrowSourcePointer   dw ; Pointer to arrow data
 
 CurrentRating        db ; what grade to show at the moment
 RatingTimer          db ; counts down to 0 to hide rating
@@ -139,7 +140,7 @@ CallHL:
   ; stuff that has to happen first
 GameVBlankHandler:
   DebugColour 1
-  call ScrollAndManageArrows ; sometimes slow
+  call ScrollAndManageArrows
   DebugColour 2
   call GetInputs
   ; Stuff that has to happen in the VBlank, and timing-sensitive
@@ -149,7 +150,7 @@ GameVBlankHandler:
   DebugColour 4
   call UpdatePalette
   DebugColour 5
-  call OutputSpriteTable ; always slow
+  call OutputSpriteTable ; 5-7000 cycles = 22-30 lines
   DebugColour 6
   ; Everything else that can overflow into the active display period without breaking
   ; count down StepLagTime
@@ -170,6 +171,7 @@ StepsActiveVBlank:
   call PSGFrame
   call SlideRating
   call UpdateScore
+  ; Check if the song has ended
   call PSGGetStatus
   or a
   ret nz
@@ -252,6 +254,12 @@ main:
   ld hl,ButterflyMusic
   call PSGPlayNoRepeat
 
+  xor a
+  ld (FrameCounter),a
+  ld (FineScroll),a
+  ld hl,ArrowData
+  ld (ArrowSourcePointer),hl
+
   ld hl,ButterflySteps ; todo one day: more tracks!
   ld a,(Difficulty)
   add a,a              ; add a*2 to hl
@@ -269,12 +277,8 @@ main:
   inc hl
   ld (FramesBetweenEvents),a
 
-  srl a ; divide by 2 to get half a frame
+  srl a ; divide by 2 to get the number of frames halfway between events
   ld (StepsFrameCounter),a ; so the current step pointer will update exactly halfway between steps (must be an even number though!)
-
-  ld a,0
-  ld (FrameCounter),a
-  ld (AmountScrolledThisInterval),a
 
   ld c,(hl)
   inc hl
@@ -382,15 +386,25 @@ main:
 ; so I will truncate the steps again for that.
 
 .section "steps" free
+.struct StepsData
+  FramesBetweenEvents         db  ; Frames between events
+  ScrollingDeltaTablePointer  dw  ; Pointer to scrolls per frame, should be FramesBetweenEvents long and sum to 40
+  ArrowsYOffset               db  ; how much to shift overlap arrows up so they line up with an exact scrolling point
+  StepLagTime                 db  ; how long to wait after drawing arrows before starting music and processing steps
+  StepLagTimeExtra            db  ; a little extra wait because the step "beat" may not exactly match the start of the music
+  HasHalfSteps                db  ; 1 if alternate steps should be a different colour
+  ; Followed by steps data, terminated by "end"
+.endst
+
 ButterflySteps:
 .dw ButterflyStepsLevel1, ButterflyStepsLevel2, ButterflyStepsLevel3, ButterflyStepsLevel4
-ButterflyStepsLevel1:
-.db 24 ; frames between events
-.dw ScrollTable2440 ; scrolling delta amount table
-.db 0 ; ArrowsYOffset = how much to shift arrow sup so they line up with an exact scrolling point
-.db $82 ; StepLagTime = how long to wait after drawing arrows before starting music and processing steps
-.db 4 ; StepLagTimeExtra = a little extra wait because the step "beat" may not exactly match the start of the music
-.db 0 ; HasHalfSteps = 1 if alternate steps should be a different colour
+
+.dstruct ButterflyStepsLevel1 instanceof StepsData data 24, ScrollTable2440, 0, 111, 4, 0
+; Arrows are drawn at y=192
+; They line up at y=8
+; So the difference is 184px
+; We scroll 40px every 24 frames
+; So that is 110.4 frames
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I2
@@ -405,22 +419,9 @@ ButterflyStepsLevel1:
 .db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,L,0 ; B2
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,U,0,L ; D1
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,D,0,R ; D2
-/*
-.db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,0,L ; B1
-.db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,L,0 ; B2
-.db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,0,L ; B1
-.db 0,U,U,0,R,0,L,0,R,0,L,0,R,0,L,0 ; B2
-.db 0,U,0,U,0,U,0,U,0,U,0,U,0,U,0,L ; D1
-.db 0,U,0,U,0,U,0,U,0,U,0,U,0,D,0,R ; D2
-*/
 .db end
-ButterflyStepsLevel2:
-.db 24 ; frames between events
-.dw ScrollTable2440
-.db 0 ; ArrowsYOffset
-.db $82 ; StepLagTime
-.db 4 ; StepLagTimeExtra
-.db 0 ; HasHalfSteps
+
+.dstruct ButterflyStepsLevel2 instanceof StepsData data 24, ScrollTable2440, 0, 111, 4, 0
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,U,R,U,L,U,R,0,0 ; I2
@@ -435,22 +436,9 @@ ButterflyStepsLevel2:
 .db 0,U,U,X,R,U,L,D,U,D,R,0,L,R,U,D ; B2
 .db 0,D,R,D,L,D,R,D,L,D,R,D,L,U,D,X ; D1
 .db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
-/*
-.db 0,U,U,X,R,U,L,D,U,D,L,0,R,L,D,U ; B1
-.db 0,U,U,X,R,U,L,D,U,D,R,0,L,R,U,D ; B2
-.db 0,U,U,X,R,U,L,D,U,D,L,0,R,L,D,U ; B1
-.db 0,U,U,X,R,U,L,D,U,D,R,0,L,R,U,D ; B2
-.db 0,D,R,D,L,D,R,D,L,D,R,D,L,U,D,X ; D1
-.db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
-*/
 .db end
-ButterflyStepsLevel3:
-.db 24 ; frames between events
-.dw ScrollTable2440
-.db 0 ; ArrowsYOffset
-.db $82 ; StepLagTime
-.db 4 ; StepLagTimeExtra
-.db 0 ; HasHalfSteps
+
+.dstruct ButterflyStepsLevel3 instanceof StepsData data 24, ScrollTable2440, 0, 111, 4, 0
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,U,R,U,L,U,R,0,0 ; I2
@@ -465,23 +453,17 @@ ButterflyStepsLevel3:
 .db 0,U,U,X,R,E,L,Z,U,D,C,0,L,R,U,Z ; B2
 .db 0,D,R,D,L,D,R,D,L,D,R,D,L,U,D,X ; D1
 .db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
-/*
-.db 0,U,U,X,R,E,L,Z,U,D,Z,0,R,L,D,E ; B1
-.db 0,U,U,X,R,E,L,Z,U,D,C,0,L,R,U,Z ; B2
-.db 0,U,U,X,R,E,L,Z,U,D,Z,0,R,L,D,E ; B1
-.db 0,U,U,X,R,E,L,Z,U,D,C,0,L,R,U,Z ; B2
-.db 0,D,R,D,L,D,R,D,L,D,R,D,L,U,D,X ; D1
-.db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
-*/
 .db end
-ButterflyStepsLevel4:
-; debugging data:
-.db 12 ; frames between events - very fast!
-.dw ScrollTable1240 ; scroll table
-.db 3 ; ArrowsYOffset
-.db $40 ; StepLagTime
-.db 4 ; StepLagTimeExtra
-.db 1 ; HasHalfSteps
+
+.dstruct ButterflyStepsLevel4 instanceof StepsData data 12, ScrollTable1240, -1, 55, 4, 1
+; Arrows are drawn at y=192
+; They line up at y=8
+; So the difference is 184px
+; We scroll 40px every 12 frames
+; So that is 55.2 frames
+; We round to 55 so they will scroll exactly 55*40/12=183px
+; So we need to shift the overlay down 1px so it's at y=9
+;.db L,R,U,D,X,Y,Z,C,Q,E,L,R,U,D,X,Y,Z,C,Q,E,L,R,U,D,X,Y,Z,C,Q,E,L,R ; testing!
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,D,U ; I2
@@ -496,18 +478,17 @@ ButterflyStepsLevel4:
 .db U,0,U,0,X,0,R,D,U,0,Q,0,C,0,0,0,L,0,D,0,R,U,L,0,D,0,R,0,L,0,R,L ; B2
 .db X,0,U,0,R,0,U,R,U,0,L,0,U,0,L,U,R,0,U,0,R,0,U,R,D,0,L,0,R,0,L,R ; D1
 .db X,0,D,0,L,0,D,L,D,0,R,0,D,0,R,D,L,0,D,0,L,0,D,L,U,0,R,0,L,0,X,0 ; D2
-/*
-.db X,0,U,0,X,0,L,D,U,0,E,0,Z,0,0,0,R,0,D,0,L,U,R,0,D,0,L,0,R,0,D,L ; B1
-.db U,0,U,0,X,0,R,D,U,0,Q,0,C,0,0,0,L,0,D,0,R,U,L,0,D,0,R,0,L,0,R,L ; B2
-.db X,0,U,0,X,0,L,D,U,0,E,0,Z,0,0,0,R,0,D,0,L,U,R,0,D,0,L,0,R,0,D,L ; B1
-.db U,0,U,0,X,0,R,D,U,0,Q,0,C,0,0,0,L,0,D,0,R,U,L,0,D,0,R,0,L,0,R,L ; B2
-.db X,0,U,0,R,0,U,R,U,0,L,0,U,0,L,U,R,0,U,0,R,0,U,R,D,0,L,0,R,0,L,R ; D1
-.db X,0,D,0,L,0,D,L,D,0,R,0,D,0,R,D,L,0,D,0,L,0,D,L,U,0,R,0,L,0,X,0 ; D2
-*/
 .db end
+.ends
 
+; We align the scroll tables so they don't cross a 256 byte boundary.
+; We only need to align to the next power of 2...
+.section "Scroll table 1" align 16
 ScrollTable1240: ; scroll 40 lines in 12 frames
 .db 3,3,4,3,3,4,3,3,4,3,3,4
+.ends
+
+.section "Scroll table 2" align 32
 ScrollTable2440: ; scroll 40 lines in 24 frames
 .db 1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2,1,2,2
 
@@ -602,9 +583,9 @@ Output208IfNeeded:
   ld a,(NumSprites)
   cp 64
   ret z
-  ; calcualte VRAM address for it
+  ; calculate VRAM address for it
   ; which is SpriteTableAddress+a
-  ld hl,SpriteTableAddress
+  ld hl,SpriteTableAddress ; is aligned to 256 so no need for 16-bit maths
   add a,l
   ld l,a
   call VRAMToHL
@@ -644,7 +625,6 @@ ColourArrows:
   ; colours are at indices 11-14 in the sprite palette
   ; in the order LDUR
   ld a,(ButtonsDown)
-;  ld b,a
 
   bit 2,a ; is L pressed?
   jr z,+
@@ -676,44 +656,26 @@ ColourArrows:
 .ends
 
 .section "Scroll and manage arrows" free
-LeftArrow:
-; Tilemap data cut out of BMP2Tile text format
-; Must be recreated any time arrows.png is edited
-.dw $0000 $0001 $0002 $0003 $0000
-.dw $0006 $0009 $000A $000B $000C
-.dw $0017 $0018 $0019 $001A $001B
-.dw $0406 $0616 $0615 $0614 $040C
-.dw $0000 $0401 $0608 $0403 $0000
-
-DownArrow:
-.dw $0000 $0004 $0005 $0204 $0000
-.dw $000D $000E $000F $0010 $020D
-.dw $001C $001D $001E $001F $0020
-.dw $0401 $0411 $0412 $0413 $0601
-.dw $0000 $0406 $0407 $0606 $0000
-
-UpArrow:
-.dw $0000 $0006 $0007 $0206 $0000
-.dw $0001 $0011 $0012 $0013 $0201
-.dw $041C $041D $041E $041F $0420
-.dw $040D $040E $040F $0410 $060D
-.dw $0000 $0404 $0405 $0604 $0000
-
-RightArrow:
-.dw $0000 $0203 $0008 $0201 $0000
-.dw $020C $0014 $0015 $0016 $0206
-.dw $061B $061A $0619 $0618 $0617
-.dw $060C $060B $060A $0609 $0606
-.dw $0000 $0603 $0602 $0601 $0000
-
-BlankSpace:
-.dsw 5*5, 0
+; Arrows in the form
+;   //   |    ^   \\
+;  //    |   /|\   \\
+; <====\\|////|\\====>
+;  \\   \|/   |    //
+;   \\   V    |   //
+ArrowData:
+.dw $0000 $0001 $0002 $0003 $0000  $0000 $0004 $0005 $0204 $0000  $0000 $0006 $0007 $0206 $0000  $0000 $0203 $0008 $0201 $0000
+.dw $0006 $0009 $000A $000B $000C  $000D $000E $000F $0010 $020D  $0001 $0011 $0012 $0013 $0201  $020C $0014 $0015 $0016 $0206
+.dw $0017 $0018 $0019 $001A $001B  $001C $001D $001E $001F $0020  $041C $041D $041E $041F $0420  $061B $061A $0619 $0618 $0617
+.dw $0406 $0616 $0615 $0614 $040C  $0401 $0411 $0412 $0413 $0601  $040D $040E $040F $0410 $060D  $060C $060B $060A $0609 $0606
+.dw $0000 $0401 $0608 $0403 $0000  $0000 $0406 $0407 $0606 $0000  $0000 $0404 $0405 $0604 $0000  $0000 $0603 $0602 $0601 $0000
+; A sentinel at the end
+.db $ff
 
 ; Scroll the screen up
 ; If it's time for a new arrow, draw it, overwriting any old ones
 ScrollAndManageArrows:
 
-  ; FrameCounter counts betwen step events
+  ; FrameCounter counts between step events
   ; it's also the index into FrameCountArray for delta scroll values
   ld a,(FrameCounter)        ; increment counter
   inc a
@@ -724,23 +686,17 @@ ScrollAndManageArrows:
 +:ld (FrameCounter),a        ; save result
 
   ; look up how much to scroll this frame
-  ld hl,(FrameCountArray)
+  ld hl,(FrameCountArray) ; aligned for easy maths
   add a,l
   ld l,a
-  jr nc,+
-  inc h ; if there was a carry then h should be incremented
-+:      ; hl points to the delta scroll for this frame
+  ld b,(hl)
 
   ; debug: save to RAM where I can see it
 ;  ld a,(hl)
 ;  ld ($d000),a
 
-  ld a,(AmountScrolledThisInterval)
-  add a,(hl)
-  ld (AmountScrolledThisInterval),a
-
   ld a,(YScroll) ; add that on to the current Y scroll value
-  add a,(hl)
+  add a,b
   cp 224 ; has it overflowed? it will carry for values < 224
   jr c,+
   sub 224 ; so subtract 224 to keep it looping properly
@@ -753,107 +709,103 @@ ScrollAndManageArrows:
 ;  ld a,(hl)
 ;  ld ($d000),a
 
-  ; check if it's time to draw the bottom half of any arrows
-  ld a,(AmountScrolledThisInterval) ; get amount scrolled
-  cp 2*8                            ; see if it's more than 2 rows
-  jr c,+                            ; skip if not
-  ; OK, check which to draw
-  ld ix,LastDrawnArrows
-  ld a,(ix+0)
-  cp $ff ; ff means don't draw anything
-  jr z,+
+  ; check if it's time to draw a new row of arrow tiles
+  ld a,(FineScroll)
+  add a,b
+  ld (FineScroll),a
+  cp 8
+  ret c
+  ; It is 8 or more - so we subtract 8 and draw a row
+  sub 8
+  ld (FineScroll),a
+  
+  ld a,(LastDrawnArrows) ; Arrow bitmask
+  ;cp End_Of_Step_Data
+  ;ret z ; TODO should draw blanks instead? This is only OK if the song ends with enough blanks...
+  ld d,a ; d = steps bitmask
+  
+  ; move the VRAM pointer to the right place
+  call GetReadyForDrawing
+  call VRAMToHL
+  
+  ld c,VDPData
+  ld hl,(ArrowSourcePointer)
+  
+  ; We emit the data in the order L, D, U, R but the steps data is in the form ----RLDU
+  ; We also need to mask the high byte of each word, and offset, and insert blanks as needed
+  
+  bit 2,d ; Left
+  call nz,_arrowRow
+  call z,_blankRow
+  bit 1,d ; Down
+  call nz,_arrowRow
+  call z,_blankRow
+  bit 0,d ; Up
+  call nz,_arrowRow
+  call z,_blankRow
+  bit 3,d ; Right
+  call nz,_arrowRow
+  call z,_blankRow
+  
+  ; Save the arrow data source pointer
+  ; We terminate it with a $ff so we know when to reset to the start
+  ld a,(hl)
+  inc a
+  jr z,_nextStep
++:ld (ArrowSourcePointer),hl
+  ret
+  
+_nextStep:
+  ; Point at the start of the arrow data again
+  ld hl,ArrowData
+  ld (ArrowSourcePointer),hl
+  
+  ; We finished the arrow - so it's time to move to the next step
+  ld a,(LastDrawnArrows)
+  and End_Of_Step_Data
+  ret nz ; Don't move past the end
+  ld hl,(StepDrawingPointer)
+  inc hl
+  ld (StepDrawingPointer),hl
+  ld a,(hl)
+  ld (LastDrawnArrows),a ; TODO remove this?
 
-  call GetReadyForDrawing ; find where to draw and set hl to the VRAM pointer value
-
-  ld de,LeftArrow+5*2*2
-  bit 2,(ix+0)
-  call z,NoArrow
-  call DrawArrowSection
-  ld bc,6*2
-  add hl,bc
-  ld de,DownArrow+5*2*2
-  bit 1,(ix+0)
-  call z,NoArrow
-  call DrawArrowSection
-  ld bc,6*2
-  add hl,bc
-  ld de,UpArrow+5*2*2
-  bit 0,(ix+0)
-  call z,NoArrow
-  call DrawArrowSection
-  ld bc,6*2
-  add hl,bc
-  ld de,RightArrow+5*2*2
-  bit 3,(ix+0)
-  call z,NoArrow
-  call DrawArrowSection
-  ; signal that I've done it
-  ld a,$ff
-  ld (ix+0),a
-+:
-
-  ; check back if it was time for a new event - if not, I've finished
-  ld a,(FrameCounter)
-  or a
-  ret nz
-
-  ; if I'm here then the counter was just reset to zero
-  ; and it's time to think about drawing a new arrow
-
-  ; reset AmountScrolledThisInterval
-  xor a
-  ld (AmountScrolledThisInterval),a
-
-  ; now I know where to draw
-  ; now I need to figure out what to draw
-
-  ld ix,(StepDrawingPointer)
-
-  call GetReadyForDrawing ; find where to draw and set hl to the VRAM pointer value
-
-  ; set up ArrowHighByte if needed
+  ; Flip ArrowHighByte if needed
   ld a,(HasHalfSteps)
   or a
-  jr z,+
+  ret z
   ld a,(ArrowHighByte)
-  xor %00001000
+  xor %00001000 ; Secondary palette flag
   ld (ArrowHighByte),a
-
-
-+:
-  ; ----RLDU
-  ld de,LeftArrow
-  bit 2,(ix+0)
-  call z,NoArrow
-  call DrawArrowSection
-  ld bc,6*2
-  add hl,bc
-  ld de,DownArrow
-  bit 1,(ix+0)
-  call z,NoArrow
-  call DrawArrowSection
-  ld bc,6*2
-  add hl,bc
-  ld de,UpArrow
-  bit 0,(ix+0)
-  call z,NoArrow
-  call DrawArrowSection
-  ld bc,6*2
-  add hl,bc
-  ld de,RightArrow
-  bit 3,(ix+0)
-  call z,NoArrow
-  call DrawArrowSection
-  ; signal to draw the bottom half later
-  ld a,(ix+0)
-  ld (LastDrawnArrows),a
-
-  ; move pointer forwards if the high bit's not set
-  bit 7,(ix+0)
-  ret nz
-
-  inc ix
-  ld (StepDrawingPointer),ix
+  ret
+  
+_arrowRow:
+  push af
+.repeat 5
+    outi
+    ld a,(ArrowHighByte)
+    or (hl)
+    out (VDPData),a
+    inc hl
+.endr
+    ; Spacer
+    xor a
+    out (VDPData),a
+    out (VDPData),a
+  pop af
+  ret
+  
+_blankRow:
+  ; We still need to move the source pointer along...
+  push de
+    ld de,10
+    add hl,de
+  pop de
+  ; ...but emit only zeroes
+  xor a
+.repeat 12
+  out (VDPData),a
+.endr
   ret
 
 
@@ -887,7 +839,7 @@ _lessthan28:
   ; hl now holds the VRAM address to draw at
   ret
 
-
+/*
 NoArrow:
   ld de,BlankSpace
   ret
@@ -940,7 +892,7 @@ NextRow:
   sub $07
   ld h,a
   ret
-
+*/
 .ends
 
 .section "Rating handler" free
@@ -1191,13 +1143,13 @@ LoadArrowSprites:
   ld (NumSprites),a
 
   ; I want to tweak their positions according to the value of ArrowsYOffset
-  ; ie. I subtract that from each of them
+  ; ie. I add that to each of them
   ld a,(ArrowsYOffset)
   ld c,a
   ld b,32
   ld hl,SpriteTable
 -:ld a,(hl)
-  sub c
+  add a,c
   ld (hl),a
   inc hl
   djnz -
@@ -1275,7 +1227,7 @@ ProcessInputs:
   ; StepHappeningPointer is now pointing at the closest step
 
 ++:
-/*
+.ifdef DEBUG_STEPS_TO_RAM
   ; debug: make it viewable
   xor a
   bit 2,(ix+0) ; L
@@ -1297,7 +1249,8 @@ ProcessInputs:
   jr z,+
   cpl
 +:ld ($d003),a
-*/
+.endif
+
   ; next: compare with player input
   ; when the player presses something, it'll be in ButtonsPressed for one frame only
 
