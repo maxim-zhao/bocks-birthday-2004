@@ -41,7 +41,7 @@ Difficulty           db ; which level we're at, 0-3
 FramesBetweenEvents  db ; how many frames between step events
 FrameCounter         db ; index into FrameCountArray, counts 0..FramesBetweenEvents-1
 FrameCountArray      dw ; pointer to an array of delta scroll values for each frame
-LastDrawnArrows      db ; a copy of the last drawn data ; TODO don't need this?
+LastDrawnArrows      db ; a copy of the last drawn data
 FineScroll           db ; Amount of fine scroll. Used to detect when it's time to draw a new row of tiles.
 ArrowSourcePointer   dw ; Pointer to arrow data
 
@@ -662,6 +662,7 @@ ColourArrows:
 ; <====\\|////|\\====>
 ;  \\   \|/   |    //
 ;   \\   V    |   //
+; This is an excerpt from the BMP2Tile raw data.
 ArrowData:
 .dw $0000 $0001 $0002 $0003 $0000  $0000 $0004 $0005 $0204 $0000  $0000 $0006 $0007 $0206 $0000  $0000 $0203 $0008 $0201 $0000
 .dw $0006 $0009 $000A $000B $000C  $000D $000E $000F $0010 $020D  $0001 $0011 $0012 $0013 $0201  $020C $0014 $0015 $0016 $0206
@@ -674,7 +675,6 @@ ArrowData:
 ; Scroll the screen up
 ; If it's time for a new arrow, draw it, overwriting any old ones
 ScrollAndManageArrows:
-
   ; FrameCounter counts between step events
   ; it's also the index into FrameCountArray for delta scroll values
   ld a,(FrameCounter)        ; increment counter
@@ -720,8 +720,6 @@ ScrollAndManageArrows:
   ld (FineScroll),a
   
   ld a,(LastDrawnArrows) ; Arrow bitmask
-  ;cp End_Of_Step_Data
-  ;ret z ; TODO should draw blanks instead? This is only OK if the song ends with enough blanks...
   ld d,a ; d = steps bitmask
   
   ; move the VRAM pointer to the right place
@@ -762,13 +760,13 @@ _nextStep:
   
   ; We finished the arrow - so it's time to move to the next step
   ld a,(LastDrawnArrows)
-  and End_Of_Step_Data
-  ret nz ; Don't move past the end
+  cp End_Of_Step_Data
+  ret z ; Don't move past the end
   ld hl,(StepDrawingPointer)
   inc hl
   ld (StepDrawingPointer),hl
   ld a,(hl)
-  ld (LastDrawnArrows),a ; TODO remove this?
+  ld (LastDrawnArrows),a
 
   ; Flip ArrowHighByte if needed
   ld a,(HasHalfSteps)
@@ -1533,7 +1531,7 @@ InitialiseScore:
   ; set up score in sprite table
   ; score at the bottom of the screen (y = 170ish)
   ; combo centred above it
-  ; score is 8 digits
+  ; score is 6 digits
 
   ; get memory address of y coordinates
   ld hl,SpriteTable
@@ -1541,16 +1539,16 @@ InitialiseScore:
   add a,l
   ld l,a
 
-  ; draw score: 8 identical Y coordinates
+  ; draw score: 6 identical Y coordinates
   ld a,170
-  ld b,8
+  ld b,6
 -:ld (hl),a
   inc hl
   djnz -
 
-  ; Combo display: 2 (that's all I have space for)
+  ; Combo display: 3
   ld a,170-16-3 ; should be OK
-  ld b,2
+  ld b,3
 -:ld (hl),a
   inc hl
   djnz -
@@ -1565,9 +1563,10 @@ InitialiseScore:
 
   ld (ScoreTileLocation),hl ; save the index of the first digit
 
-  ; start at x=64 for the score
-  ld a,64
-  ld b,8
+  ; The score is 6 characters = 96px wide
+  ; So we centre it at x=(248-96)/2+8=84
+  ld a,84
+  ld b,6 ; number of digits
 -:ld (hl),a
   add a,16
   inc hl
@@ -1577,9 +1576,9 @@ InitialiseScore:
 
   ld (ComboTileLocation),hl
 
-  ; start at 104 for the combo number
-  ld a,112
-  ld b,2 ; 2 zeroes
+  ; 3 characters => x=(248-3*16)/2+8=108
+  ld a,108
+  ld b,3 ; 3 digits
 -:ld (hl),a
   add a,16
   inc hl
@@ -1589,7 +1588,7 @@ InitialiseScore:
 
   ; signal that these sprites are there
   ld a,(NumSprites)
-  add a,8+2
+  add a,6+3
   ld (NumSprites),a
 
   ; set up control variables
@@ -1611,13 +1610,20 @@ UpdateScoreDisplay:
   ; change sprite indices one at a time
   ld iy,(ScoreTileLocation) ; where to write to
 
+  ; TODO: reduce digit count on score, add a digit to the combo counter
+
   ; this is hard!
   ; get 1st digit (10,000,000s)
   ld hl,(ScoreHigh)
   ld ix,(ScoreLow)
 
-  ld bc,$ff67 ; bcde = -10000000
-  ld de,$6980 ;
+.macro LdBCDE args value
+  ld bc,(value) >> 16
+  ld de,(value) & $ffff
+.endm
+
+.macro ProcessDigit32 args x, tileIndex
+  LdBCDE -x
   ld a,-1 ; reset counter
 
 -:inc a
@@ -1630,144 +1636,54 @@ UpdateScoreDisplay:
   jr c,-
 
   ; undo the last subtraction
-  ld bc,$0098
-  ld de,$9680
+  LdBCDE x
   add ix,de
   adc hl,bc
 
   ; that's my digit
   add a,DIGIT_0 ; index of 0 sprite
-  ld (iy+1),a
+  ld (iy+tileIndex),a
+.endm
 
-  ; and repeat for other digits
-
-  ld bc,$fff0 ; bcde = -1000000
-  ld de,$bdc0 ;
-  ld a,-1 ; reset counter
--:inc a
-  add ix,de
-  adc hl,bc ; hlix += bcde
-  jr c,-
-  ld bc,$000f
-  ld de,$4240
-  add ix,de
-  adc hl,bc
-  add a,DIGIT_0
-  ld (iy+3),a
-
-  ld bc,$fffe ; bcde = -100000
-  ld de,$7960 ;
-  ld a,-1 ; reset counter
--:inc a
-  add ix,de
-  adc hl,bc ; hlix += bcde
-  jr c,-
-  ld bc,$0001
-  ld de,$86a0
-  add ix,de
-  adc hl,bc
-  add a,DIGIT_0
-  ld (iy+5),a
-
-  ld bc,$ffff ; bcde = -10000
-  ld de,$d8f0 ;
-  ld a,-1 ; reset counter
--:inc a
-  add ix,de
-  adc hl,bc ; hlix += bcde
-  jr c,-
-  ld bc,$0000
-  ld de,$2710
-  add ix,de
-  adc hl,bc
-  add a,DIGIT_0
-  ld (iy+7),a
-
-  ; maybe I could avoid processing all 32 bits now
-  ld bc,$ffff ; bcde = -1000
-  ld de,$fc18 ;
-  ld a,-1 ; reset counter
--:inc a
-  add ix,de
-  adc hl,bc ; hlix += bcde
-  jr c,-
-  ld bc,$0000
-  ld de,$03e8
-  add ix,de
-  adc hl,bc
-  add a,DIGIT_0
-  ld (iy+9),a
-
-  ; only 8 bits now
-  ld bc,$ffff ; bcde = -100
-  ld de,$ff9c ;
-  ld a,-1 ; reset counter
--:inc a
-  add ix,de
-  adc hl,bc ; hlix += bcde
-  jr c,-
-  ld bc,$0000
-  ld de,$0064
-  add ix,de
-  adc hl,bc
-  add a,DIGIT_0
-  ld (iy+11),a
-
-  ld bc,$ffff ; bcde = -10
-  ld de,$fff6 ;
-  ld a,-1 ; reset counter
--:inc a
-  add ix,de
-  adc hl,bc ; hlix += bcde
-  jr c,-
-  ld bc,$0000
-  ld de,$000a
-  add ix,de
-  adc hl,bc
-  add a,DIGIT_0
-  ld (iy+13),a
+  ; Assume it's <1000000
+  ProcessDigit32 100000, 1
+  ProcessDigit32 10000, 3
+  ProcessDigit32 1000, 5
+  ProcessDigit32 100, 7
+  ProcessDigit32 10, 9
 
   ; only the last digit left
   ld a,ixl
   add a,DIGIT_0
-  ld (iy+15),a
+  ld (iy+11),a
 
   ; Now, do the same for the combo
   ld iy,(ComboTileLocation) ; where to write to
+  ld hl,(ComboLength)
   
-  ld a,(ComboLength+1)
-  or a
-  jr nz,_MoreThan99
+.macro ProcessDigit16 args x, tileIndex
+  ld bc,-x
+  ld a,-1 ; reset counter
 
-  ld a,(ComboLength) ; only look at the LSB which is the first one
+-:inc a
+  add hl,bc ; hl += bc
+  jr c,-
 
-  ; check if it's more than 99
-  cp 99+1
-  jr nc,_MoreThan99
+  ; undo the last subtraction
+  ld bc,x
+  adc hl,bc
 
-  ; count the tens
-  ld c,-1 ; how many I found
-  ld b,10 ; how much to subtract each time
--:inc c
-  sub b
-  jr nc,-
-  add a,b
-  ; that's it
-  push af
-    ld a,c
-    add a,DIGIT_0 ; index of 0 tile
-    ld (iy+1),a
-  pop af
-  add a,$6f
-  ld (iy+3),a
+  ; that's my digit
+  add a,DIGIT_0 ; index of 0 sprite
+  ld (iy+tileIndex),a
+.endm
 
-  ret
-
-_MoreThan99:
-  ld a,DIGIT_0+10 ; index of >99 tiles
-  ld (iy+1),a
-  inc a
-  ld (iy+3),a
+  ; Assume it's <1000
+  ProcessDigit16 100,1
+  ProcessDigit16 10,3
+  ld a,l
+  add a,DIGIT_0
+  ld (iy+5),a
 
   ret
 
@@ -1961,100 +1877,95 @@ PaletteFadeLookup:
 .db 0,1,2,3
 
 AdjustColour:   ; pass colour in a, amount<<2 in b; returns adjusted colour in a, b unaffected
-    or b            ; now a=amount:colour, which is the index to PaletteFadeLookup
-    ld d,0
-    ld e,a
-    ld hl,PaletteFadeLookup
-    add hl,de
-    ld a,(hl)     ; now a=adjusted amount
-    ret
+  or b          ; now a=amount:colour, which is the index to PaletteFadeLookup
+  ld d,0
+  ld e,a
+  ld hl,PaletteFadeLookup
+  add hl,de
+  ld a,(hl)     ; now a=adjusted amount
+  ret
 
 FadePalette:
-    ; Load ActualPalette with palette
-    ; Set FadeDirection to 1 to fade to black, 0 to fade from black
+  ; Load ActualPalette with palette
+  ; Set FadeDirection to 1 to fade to black, 0 to fade from black
 
-    ; Initial multiplication value:
-    ld b,%0000  ; Zero, unless FadeDirection!=0
-    ld a,(FadeDirection)
-    cp 0
-    jp z,+
-    ld b,%1000
-    +:
+  ; Initial multiplication value:
+  ld b,%0000  ; Zero, unless FadeDirection!=0
+  ld a,(FadeDirection)
+  cp 0
+  jp z,+
+  ld b,%1000
++:
 
-    PaletteFadeLoop:
+_paletteFadeLoop:
     ; Copy palette using lookup to fade colours in
-        ld c,16 ; 16 palette entries to process
-        ld ix,ActualPalette ; original palette and offset to new one
-        AdjustColourAtIX:
-            push bc
-            ld a,(ix+0)     ; red
-            and %00000011
-            call AdjustColour
-            ld c,a
-            ld a,(ix+0)     ; green
-            srl a           ; >>2
-            srl a
-            and %00000011
-            call AdjustColour
-            sla a
-            sla a
-            or c
-            ld c,a
-            ld a,(ix+0)     ; blue
-            srl a           ; >>4
-            srl a
-            srl a
-            srl a
-            and %00000011
-            call AdjustColour
-            sla a
-            sla a
-            sla a
-            sla a
-            or c
-            ld c,a
-            ; a is now the colour I want
-            ld (ix+$10),a   ; write to fading palette
-            inc ix
-            pop bc
-            dec c
-            jr nz,AdjustColourAtIX
+    ld c,16 ; 16 palette entries to process
+    ld ix,ActualPalette ; original palette and offset to new one
+_adjustColourAtIX:
+    push bc
+      ld a,(ix+0)     ; red
+      and %00000011
+      call AdjustColour
+      ld c,a
+      ld a,(ix+0)     ; green
+      srl a           ; >>2
+      srl a
+      and %00000011
+      call AdjustColour
+      sla a
+      sla a
+      or c
+      ld c,a
+      ld a,(ix+0)     ; blue
+      srl a           ; >>4
+      srl a
+      srl a
+      srl a
+      and %00000011
+      call AdjustColour
+      sla a
+      sla a
+      sla a
+      sla a
+      or c
+      ld c,a
+      ; a is now the colour I want
+      ld (ix+$10),a   ; write to fading palette
+      inc ix
+    pop bc
+    dec c
+    jr nz,_adjustColourAtIX
 
-        ; Full palette fade done in RAM, now load it
-        ld hl,ActualPalette+$10
-        push bc
-            ld b,16
-            ld c,0
-            call LoadPaletteOld
+    ; Full palette fade done in RAM, now load it
+    ld hl,ActualPalette+$10
+    push bc
+      ld b,16
+      ld c,0
+      call LoadPaletteOld
 
-;            ld a,%11000000  ; Turn screen on
-;            out ($bf),a
-;            ld a,$81
-;            out ($bf),a
+      ld c,15
+      call WaitForCFrames
+    pop bc
+    ; Are we fading in or out?
+    ld a,(FadeDirection)
+    or a
+    jr z,+
 
-            ld c,15
-            call WaitForCFrames
-        pop bc
-        ; Are we fading in or out?
-        ld a,(FadeDirection)
-        cp 0
-        jp z,+
-        ; FadeToBlack=1
-        ; so decrement b and jump if >=0
-        ld a,b
-        sub %100
-        ld b,a
-        jp p,PaletteFadeLoop   ; if it's >0 then repeat
-        jp ++
-        +:
-        ; FadeToBlack=0
-        ; so inceremnt b and jump if !=%1000
-        ld a,b
-        add a,%100
-        ld b,a
-        cp %10000   ; if it's not 4<<2 then repeat
-        jp nz,PaletteFadeLoop
-        ++:
+    ; FadeToBlack=1
+    ; so decrement b and jump if >=0
+    ld a,b
+    sub %100
+    ld b,a
+    jp nz,_paletteFadeLoop   ; if it's >0 then repeat
+    ret
+
++:  ; FadeToBlack=0
+    ; so increment b and jump if !=%1000
+    ld a,b
+    add a,%100
+    ld b,a
+    cp %10000   ; if it's not 4<<2 then repeat
+    jp nz,_paletteFadeLoop
     ret
 .ends
 
