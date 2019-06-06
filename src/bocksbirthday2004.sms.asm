@@ -1520,6 +1520,13 @@ _ResetComboLength:
   ret
 
 _IncrementComboLength:
+  ; We increment twice for two-direction steps
+  inc hl
+  ld (ComboLength),hl
+  ld a,(ix-1) ; ix is pointing at the following step
+  or a
+  ret po ; odd parity -> only one bit set
+  ; even -> must be two
   inc hl
   ld (ComboLength),hl
   ret

@@ -99,8 +99,8 @@ Here's how the scoring works:
 
 | Step rating | Score      | Combo length |
 |-------------|------------|--------------|
-| Perfect     | M * M * 3  | +1           |
-| Great       | M * M      | +1           |
+| Perfect     | M * M * 3  | Add 1 for each arrow in the step |
+| Great       | M * M      | Add 1 for each arrow in the step |
 | Good        | M          | Set to 0     |
 | Boo         | 0          | Set to 0     |
 | Miss        | 0          | Set to 0     |
@@ -122,13 +122,12 @@ the highest scores possible:
 
 | Difficulty | Maximum score |
 |------------|--------------:|
-| Beginner   |        167892 |
-| Light      |        964965 |
-| Standard   |        964965 |
-| Heavy      |       2185461 |
+| Beginner   |         47124 |
+| Light      |        339864 |
+| Standard   |        445101 |
+| Heavy      |        799146 |
 
-If you can get even 10% of these you're very good. I normally get 15000-20000 
-without trying very hard.
+If you can get even 10% of these you're very good.
 
 You can keep track of your combo length and score near the bottom of the screen.
 
