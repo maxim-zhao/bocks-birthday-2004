@@ -1,6 +1,5 @@
-.define AlwaysPerfect ; Used to find the maximum scores
-.define OffsetArrows 3 ; I originally placed all the artwork by hand, rather than edit a bunch of numbers this lets me apply a modifier to them.
-.define DebugTiming ; If defined, we change the border colour during VBlank to measure how long different functions take
+;.define AlwaysPerfect ; Used to find the maximum scores
+;.define DebugTiming ; If defined, we change the border colour during VBlank to measure how long different functions take
 
 ;==============================================================
 ; WLA-DX banking setup
@@ -832,65 +831,11 @@ _lessthan28:
   rr a         ;
   ld h,b       ; hl = b*64
   ld l,a
-  ld bc,(TileMapAddress-$4000)+2*(2+OffsetArrows)  ; draw from 2 tiles from the left
+  ld bc,(TileMapAddress-$4000)+2*5  ; draw from 5 tiles from the left
   add hl,bc
   ; hl now holds the VRAM address to draw at
   ret
 
-/*
-NoArrow:
-  ld de,BlankSpace
-  ret
-
-DrawArrowSection:
-; draw 5x3 word tile data from (de) to VRAM at (hl)
-; do not destroy hl
-  push hl
-    call VRAMToHL
-    call Output5
-    call NextRow
-    call VRAMToHL
-    call Output5
-    call NextRow
-    call VRAMToHL
-    call Output5
-  pop hl
-  ret
-
-Output5:
-  ; output 5 tiles from de to VDPData
-  ; save hl, increment de by 5
-  push hl
-    ld h,d ; ld hl,de
-    ld l,e
-    ld b,5
-  -:ld a,(hl)
-    out (VDPData),a
-    inc hl
-    ld a,(ArrowHighByte)
-    or (hl)
-    out (VDPData),a
-    inc hl
-    djnz -
-    ld d,h ; ld de,hl
-    ld e,l
-  pop hl
-  ret
-
-NextRow:
-; add 64 to hl
-; if it's more than $3f00 then subtract $700
-; do not detroy de
-  ld bc,64 ; 1 row
-  add hl,bc
-  ld a,h
-  cp $3f
-  ret c
-  ; it is more than $3f
-  sub $07
-  ld h,a
-  ret
-*/
 .ends
 
 .section "Rating handler" free
@@ -1019,36 +964,27 @@ Ratings:
 .dw RatingBoo
 .dw RatingMiss
 
-RatingPerfect:
-.db 22 ; number of sprites
-.db OffsetArrows*8+20 ; starting x value
-.db $21,$22,$23,$24,$25,$26,$27,$28,$29,$2a,$2b,0 ; tile numbers - 0 signals end-of-row
-.db $2c,$2d,$2e,$2f,$30,$31,$32,$33,$34,$35,$36
-.db cl030,cl020,cl010,cl020 ; palette (4 colours)
+.define tile $21 ; next tile
+.macro Rating args width, height, px, c1, c2, c3, c4
+  .db width*height ; tiel count
+  .db (248-px*2)/2+8 ; starting x
+  .repeat height index n
+    .repeat width
+      .db tile ; increment along row
+      .redefine tile tile+1
+    .endr
+    .if n < (height-1)
+      .db 0 ; zero at row ends except the last one
+    .endif
+  .endr
+  .db c1, c2, c3, c4
+.endm
 
-RatingGreat:
-.db 18,OffsetArrows*8+40
-.db $37,$38,$39,$3a,$3b,$3c,$3d,$3e,$3f,0
-.db $40,$41,$42,$43,$44,$45,$46,$47,$48
-.db cl033,cl032,cl031,cl032
-
-RatingGood:
-.db 14,OffsetArrows*8+58
-.db $49,$4a,$4b,$4c,$4d,$4e,$4f,0
-.db $50,$51,$52,$53,$54,$55,$56
-.db cl021,cl221,cl330,cl221
-
-RatingBoo:
-.db 10,OffsetArrows*8+68
-.db $57,$58,$59,$5a,$5b,0
-.db $5c,$5d,$5e,$5f,$60
-.db cl100,cl200,cl300,cl200
-
-RatingMiss:
-.db 14,OffsetArrows*8+57
-.db $61,$62,$63,$64,$65,$66,$67,0
-.db $68,$69,$6a,$6b,$6c,$6d,$6e
-.db cl300,cl201,cl000,cl302
+RatingPerfect:  Rating 11, 2, 87, cl030,cl020,cl010,cl020
+RatingGreat:    Rating  9, 2, 66, cl033,cl032,cl031,cl032
+RatingGood:     Rating  7, 2, 50, cl021,cl221,cl330,cl221
+RatingBoo:      Rating  6, 2, 42, cl100,cl200,cl300,cl200
+RatingMiss:     Rating  7, 2, 52, cl300,cl201,cl000,cl302
 
 UpdateRating:
   ; decrement counter
@@ -1155,7 +1091,7 @@ LoadArrowSprites:
   ret
 
 SpriteData:
-.define X OffsetArrows*8
+.define X 3*8
 ; very lazy method: raw VRAM data
 ; y positions
 .db  8, 8, 8,  9, 9, 9,  9, 9, 9,  8, 8, 8 ; 12
@@ -1603,7 +1539,7 @@ InitialiseScore:
 
 UpdateScoreDisplay:
 
-.define DIGIT_0 $6f
+.define DIGIT_0 $71
 
   ; read score from ScoreHigh, ScoreLow
   ; convert to decimal (!)
