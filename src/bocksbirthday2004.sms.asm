@@ -28,8 +28,15 @@ banks 1
 SpriteTable          dsb $100 ; RAM copy of the sprite table
 NumSprites           db       ; how many sprites there are in it
 SpriteDirection      db       ; flip between 0 and 1 every frame for flickering
-ActualPalette        dsb 32
-FadeDirection        db ; 1 to fade in, 0 to fade out
+
+PaletteFadeControl   db       ; bit 7 1 = fade in, 0 = fade out
+                              ;       lower bits = counter, should go 9->0
+                              ;       Must be followed by:
+PaletteSize          db       ; counter for number of entries in TargetPalette
+PaletteFadeFrameCounter db    ; Palette fade frame counter
+ActualPalette        dsb 32   ; 32 bytes Actual palette (when fading)
+TargetPalette        dsb 32   ; 32 bytes Target palette
+
 ButtonsDown          db ; buttons currently pressed --21RLDU 1 = pressed
 ButtonsPressed       db ; buttons currently pressed that weren't pressed last frame
 StepDrawingPointer   dw ; pointer to step to be drawn next
@@ -114,9 +121,14 @@ SDSCNotes:
 ;==============================================================
 .org $0038
 .section "VBlank handler" force
-  in a,$bf ; clear interrupt flag
-  ld hl,(VBlankHandler)
-  call CallHL
+  ; swap to shadow registers for VBlank
+  exx
+  ex af,af'
+    in a,$bf ; clear interrupt flag
+    ld hl,(VBlankHandler)
+    call CallHL
+  ex af,af'
+  exx
   ei
   reti
 
@@ -147,7 +159,7 @@ GameVBlankHandler:
   DebugColour 3
   call ColourArrows
   DebugColour 4
-  call UpdatePalette
+  call PaletteToCRAM
   DebugColour 5
   call OutputSpriteTable ; 5-7000 cycles = 22-30 lines
   DebugColour 6
@@ -238,7 +250,7 @@ main:
 
     ; load palette
     ld hl,GamePalette
-    ld de,ActualPalette
+    ld de,TargetPalette
     ld bc,32
     ldir
 
@@ -324,24 +336,16 @@ main:
   ld a,0
   ld (SongEndPauseCounter),a
 
+  call ColourArrows
+  call OutputSpriteTable
+
+  ld hl,PaletteFadeVBlank
+  ld (VBlankHandler),hl
+  call TurnOnScreen
+  call FadeIn
+
   ld hl,GameVBlankHandler
   ld (VBlankHandler),hl
-  
-  call WaitForVBlankNoInt
-
-  ; Turn screen on
-  ld a,%11100101
-;        |||| |`- Zoomed sprites -> 16x16 pixels
-;        |||| `-- Doubled sprites -> 2 tiles per sprite, 8x16
-;        |||`---- 30 row/240 line mode
-;        ||`----- 28 row/224 line mode
-;        |`------ VBlank interrupts
-;        `------- Enable display
-  out ($bf),a
-  ld a,$81
-  out ($bf),a
-
-  ei
 
   ; Do everything in interrupts
   Loop:
@@ -500,7 +504,7 @@ ArrowTiles:
 .incbin "backgrounds/arrows.png.tiles.zx7"
 GamePalette:
 .db cl012 cl000 cl111 cl333 cl330 cl231 cl232 0     0     0     0     0     0     0     0     0
-.db cl012 cl000 cl111 cl333 cl211 cl212 cl202 0     0     0     0     0     0     0     0     0
+.db cl012 cl000 cl111 cl333 cl211 cl212 cl202 0     0     0     0     cl333 cl333 cl333 cl333 0
 ;   BG    <-black-g-white-> >-Arrow---------> <-Text colour scroll--> <-Top arrow entries-> Unused
 ; Notice the alternative arrow colour using the sprite palette
 .enum 0
@@ -590,17 +594,6 @@ Output208IfNeeded:
   call VRAMToHL
   ld a,208
   out (VDPData),a
-  ret
-.ends
-
-.section "Write palette to CRAM" free
-UpdatePalette:
-  ld hl,$c000
-  call VRAMToHL
-  ld c,VDPData
-  ld hl,ActualPalette
-  ld b,32
-  otir            ; Output b bytes starting at hl to port c
   ret
 .ends
 
@@ -1015,22 +1008,6 @@ UpdateRating:
 TurnOffRating:
   ; turn off rating display
   
-/*
-  ld a,(CurrentRating)
-  and $f ; cut off high bits
-  add a,a ; multiply by 2
-  ld hl,Ratings
-  add a,l
-  ld l,a
-  jr nc,+
-  ; carry means h needs to change
-  inc h
-+:ld c,(hl)
-  inc hl
-  ld b,(hl)
-  push bc
-  pop hl ; hl now points to the data
-  */
   ld a,(NumSprites)
   ld hl,RatingSprites
   sub (hl) ; subtract the current rating's sprite count
@@ -1546,10 +1523,6 @@ UpdateScoreDisplay:
   ; change sprite indices one at a time
   ld iy,(ScoreTileLocation) ; where to write to
 
-  ; TODO: reduce digit count on score, add a digit to the combo counter
-
-  ; this is hard!
-  ; get 1st digit (10,000,000s)
   ld hl,(ScoreHigh)
   ld ix,(ScoreLow)
 
@@ -1630,7 +1603,7 @@ UpdateScoreDisplay:
 ShowScreenAndWait:
   call ShowScreen
   call WaitForButton
-  call FadePaletteOut
+  call FadeOut
   jp TurnOffScreen ; and ret
 
 ShowScreen:
@@ -1644,18 +1617,26 @@ ShowScreen:
   call zx7_decompress
   ld l,(ix+4)
   ld h,(ix+5)
-  ld de,ActualPalette
+  ld de,TargetPalette
   ld bc,16
   ldir
   call TurnOnScreen
-  jp FadePaletteIn ; and ret
+  jp FadeIn ; and ret
+
+EmptyVBlankHandler:
+  ret
 
 TitleScreen:
+  ld hl,EmptyVBlankHandler
+  ld (VBlankHandler),hl
+
   call TurnOffScreen
 
   ; turn off sprites
   call NoSprites
 
+  ei
+  
   ld ix,xiao
   call ShowScreenAndWait
 
@@ -1700,7 +1681,6 @@ LevelSelect:
   push bc
     call HighlightDifficulty
     call WaitForVBlankNoInt
-    call UpdatePalette
   pop bc
 
   call WaitForInput
@@ -1721,7 +1701,7 @@ LevelSelect:
 StartGame:
   ld a,c
   ld (Difficulty),a
-  call FadePaletteOut
+  call FadeOut
   call TurnOffScreen
 
   ret
@@ -1778,19 +1758,9 @@ HighlightDifficulty:
 ++:
   ret
 
-FadePaletteIn:
-  ld a,0
-  ld (FadeDirection),a
-  jp FadePalette
-
-FadePaletteOut:
-  ld a,1
-  ld (FadeDirection),a
-  jp FadePalette
-
 TurnOnScreen:
-  ; turn off screen
-  ld a,%11000100
+  ; turn on screen
+  ld a,%11100101
 ;        |||| |`- Zoomed sprites -> 16x16 pixels
 ;        |||| `-- Doubled sprites -> 2 tiles per sprite, 8x16
 ;        |||`---- 30 row/240 line mode
@@ -1801,129 +1771,154 @@ TurnOnScreen:
   ld a,$81
   out ($bf),a
   ret
+.ends
 
-
-; Palette fader from 2002
-; TODO: make it use the colourful fader from Phantasy Star?
-
-PaletteFadeLookup:
-.db 0,0,0,0
-.db 0,0,1,1
-.db 0,1,1,2
-.db 0,1,2,3
-
-AdjustColour:   ; pass colour in a, amount<<2 in b; returns adjusted colour in a, b unaffected
-  or b          ; now a=amount:colour, which is the index to PaletteFadeLookup
-  ld d,0
-  ld e,a
-  ld hl,PaletteFadeLookup
-  add hl,de
-  ld a,(hl)     ; now a=adjusted amount
+.section "Palette fades" free
+; Call once per VBlank
+PaletteToCRAM:
+  ld hl,PaletteAddress
+  call VRAMToHL
+  ld hl,ActualPalette
+  ld bc,(32 << 8) | VDPData
+  otir
   ret
 
-FadePalette:
-  ; Load ActualPalette with palette
-  ; Set FadeDirection to 1 to fade to black, 0 to fade from black
+; Call to initiate a fade in from black
+FadeIn:
+  ld hl,ActualPalette
+  ld de,ActualPalette+1
+  ld bc,31
+  ld (hl),$00
+  ldir               ; Fill ActualPalette with black
 
-  ; Initial multiplication value:
-  ld b,%0000  ; Zero, unless FadeDirection!=0
-  ld a,(FadeDirection)
-  cp 0
-  jp z,+
-  ld b,%1000
-+:
+  ld hl,$2089        ; Set PaletteFadeControl to fade in ($89) the whole palette ($20)
+  jr +
 
-_paletteFadeLoop:
-    ; Copy palette using lookup to fade colours in
-    ld c,16 ; 16 palette entries to process
-    ld ix,ActualPalette ; original palette and offset to new one
-_adjustColourAtIX:
-    push bc
-      ld a,(ix+0)     ; red
-      and %00000011
-      call AdjustColour
-      ld c,a
-      ld a,(ix+0)     ; green
-      srl a           ; >>2
-      srl a
-      and %00000011
-      call AdjustColour
-      sla a
-      sla a
-      or c
-      ld c,a
-      ld a,(ix+0)     ; blue
-      srl a           ; >>4
-      srl a
-      srl a
-      srl a
-      and %00000011
-      call AdjustColour
-      sla a
-      sla a
-      sla a
-      sla a
-      or c
-      ld c,a
-      ; a is now the colour I want
-      ld (ix+$10),a   ; write to fading palette
-      inc ix
-    pop bc
-    dec c
-    jr nz,_adjustColourAtIX
+FadeOutBackground:
+  ld hl,$1009        ; Set PaletteFadeControl to fade out ($89) the BG palette ($10)
+  jr +
 
-    ; Full palette fade done in RAM, now load it
-    ld hl,ActualPalette+$10
-    push bc
-      ld b,16
-      ld c,0
-      call LoadPaletteOld
+; Call to initiate a fade out to black
+FadeOut:
+  ld hl,$2009        ; Fade out, 32 colours
++:ld (PaletteFadeControl),hl
 
-      ld c,15
-      call WaitForCFrames
-    pop bc
-    ; Are we fading in or out?
-    ld a,(FadeDirection)
-    or a
-    jr z,+
+  ; select a suitable vblank routine
+  ld hl,PaletteFadeVBlank
+  ld (VBlankHandler),hl
 
-    ; FadeToBlack=1
-    ; so decrement b and jump if >=0
-    ld a,b
-    sub %100
-    ld b,a
-    jp nz,_paletteFadeLoop   ; if it's >0 then repeat
+  ; wait for it to finish
+-:
+  ld a,(PaletteFadeControl)
+  and $7f
+  halt ; halt here because else we end one frame early
+  jr nz,-
+
+  ret
+
+
+; VBlank routine for during palette fades
+PaletteFadeVBlank:
+  ; VRAM
+  call PaletteToCRAM
+  ; Non-VRAM
+  call FadePaletteInRAM
+  ret
+
+; Call once per frame to do palette fading
+; Stolen from Phantasy Star
+; Main function body only runs every 4 calls (using PaletteFadeFrameCounter as a counter)
+; Checks PaletteFadeControl - bit 7 = fade in, rest = counter
+; PaletteSize tells it how many palette entries to fade
+; TargetPalette and ActualPalette are referred to
+FadePaletteInRAM:
+    ld hl,PaletteFadeFrameCounter ; Decrement PaletteFadeFrameCounter
+    dec (hl)
+    ret p              ; return if >=0
+    ld (hl),$03        ; otherwise set to 3 and continue (so only do this part every 4 calls)
+    ld hl,PaletteFadeControl ; Check PaletteFadeControl
+    ld a,(hl)
+    bit 7,a            ; if bit 7 is set
+    jp nz,_FadeIn      ; then fade in
+    or a               ; If PaletteFadeControl==0
+    ret z              ; then return
+    dec (hl)           ; Otherwise, decrement PaletteFadeControl
+    inc hl
+    ld b,(hl)          ; PaletteSize
+    ld hl,ActualPalette
+  -:call _FadeOut      ; process PaletteSize bytes from ActualPalette
+    inc hl
+    djnz -
     ret
 
-+:  ; FadeToBlack=0
-    ; so increment b and jump if !=%1000
-    ld a,b
-    add a,%100
-    ld b,a
-    cp %10000   ; if it's not 4<<2 then repeat
-    jp nz,_paletteFadeLoop
+_FadeOut:
+    ld a,(hl)
+    or a
+    ret z              ; zero = black = no fade to do
+    and %00000011      ; check red
+    jr z,+
+    dec (hl)           ; If non-zero, decrement
+    ret
+  +:ld a,(hl)
+    and %00001100      ; check green
+    jr z,+
+    ld a,(hl)
+    sub $04            ; If non-zero, decrement
+    ld (hl),a
+    ret
+  +:ld a,(hl)
+    and $30            ; check blue
+    ret z
+    sub $10            ; If non-zero, decrement
+    ld (hl),a
+    ret
+
+_FadeIn:
+    cp $80             ; Is only bit 7 set?
+    jr nz,+            ; If not, handle that
+    ld (hl),$00        ; Otherwise, zero it (PaletteFadeControl)
+    ret
+  +:dec (hl)           ; Decrement it (PaletteFadeControl)
+    inc hl
+    ld b,(hl)          ; PaletteSize
+    ld hl,TargetPalette
+    ld de,ActualPalette
+  -:call _FadePaletteEntry ; compare PaletteSize bytes from ActualPalette
+    inc hl
+    inc de
+    djnz -
+    ret
+
+_FadePaletteEntry:
+    ld a,(de)          ; If (de)==(hl) then leave it
+    cp (hl)
+    ret z
+    add a,%00010000    ; increment blue
+    cp (hl)
+    jr z,+
+    jr nc,++           ; if it's too far then try green
+  +:ld (de),a          ; else save that
+    ret
+ ++:ld a,(de)
+    add a,%00000100    ; increment green
+    cp (hl)
+    jr z,+
+    jr nc,++           ; if it's too far then try red
+  +:ld (de),a          ; else save that
+    ret
+ ++:ex de,hl
+    inc (hl)           ; increment red
+    ex de,hl
     ret
 .ends
 
 .section "Song finished" free
 SongFinished:
+  ; we are still in the VBlank handler...
+  ei
+  call FadeOut ; TODO: fade sprite palette
+  call TurnOffScreen
 
-  di
-
-  call FadePaletteOut ; TODO: fade sprite palette
-
-  ; Turn screen off
-  ld a,%10100101
-;        |||| |`- Zoomed sprites -> 16x16 pixels
-;        |||| `-- Doubled sprites -> 2 tiles per sprite, 8x16
-;        |||`---- 30 row/240 line mode
-;        ||`----- 28 row/224 line mode
-;        |`------ VBlank interrupts
-;        `------- Enable display
-  out ($bf),a
-  ld a,$81
-  out ($bf),a
-  
   jp 0 ; reset game :P
 
 
