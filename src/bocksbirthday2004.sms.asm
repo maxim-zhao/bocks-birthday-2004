@@ -233,7 +233,7 @@ main:
     ; I don't care about the port $3e value in ram at $c000
     ld hl,$c000
     ld de,$c001
-    ld a,0
+    xor a
     ld (hl),a ; zero
     ldir     ; propagate that through RAM
 
@@ -320,7 +320,7 @@ main:
   ld a,60 ; TODO :change this?
   ld (RatingLength),a
   
-  ld a,0
+  xor a
   ld (SongEndPauseCounter),a
 
   call ColourArrows
@@ -1264,7 +1264,7 @@ CalculateRating:
   ; 0 or 1: perfect (I am generous)
   cp 1+1
   jr nc,+
-  ld a,0
+  xor a
   ret
   ; 2 or 3: great
 +:cp 3+1
