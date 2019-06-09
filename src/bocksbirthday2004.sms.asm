@@ -308,14 +308,6 @@ main:
 
   ld a,(hl)
   inc hl
-  push hl
-    ld hl,StepsFrameCounter
-    add a,(hl)
-    ld (hl),a ; add on that extra bit so the steps code will exactly match the beat
-  pop hl
-
-  ld a,(hl)
-  inc hl
   ld (HasHalfSteps),a
 
   ld (StepHappeningPointer),hl ; the happening pointer is in time with the music, so it starts late
@@ -364,8 +356,7 @@ main:
 
 
 ; All steps are fairly similar, obviously
-; The step patterns I downloaded (labelled with "smile.dk" but that seems
-; to be something else now) are in the form
+; The step patterns I downloaded (labelled with "ddrmaine.com") are in the form
 ;
 ; I1 I2 A1 A2 B1 B2 C A1 A2 B1 B2 D1 D2
 ;
@@ -389,7 +380,6 @@ main:
   ScrollingDeltaTablePointer  dw  ; Pointer to scrolls per frame, should be FramesBetweenEvents long and sum to 40
   ArrowsYOffset               db  ; how much to shift overlap arrows up so they line up with an exact scrolling point
   StepLagTime                 db  ; how long to wait after drawing arrows before starting music and processing steps
-  StepLagTimeExtra            db  ; a little extra wait because the step "beat" may not exactly match the start of the music
   HasHalfSteps                db  ; 1 if alternate steps should be a different colour
   ; Followed by steps data, terminated by "end"
 .endst
@@ -397,7 +387,11 @@ main:
 ButterflySteps:
 .dw ButterflyStepsLevel1, ButterflyStepsLevel2, ButterflyStepsLevel3, ButterflyStepsLevel4
 
-.dstruct ButterflyStepsLevel1 instanceof StepsData data 24, ScrollTable2440, 0, 111, 4, 0
+; Music is 384 frames per "phrase"
+; = 96 frames per "bar" (? terminology)
+; = 24 frames per beat
+
+.dstruct ButterflyStepsLevel1 instanceof StepsData data 24, ScrollTable2440, 0, 111, 0
 ; Arrows are drawn at y=192
 ; They line up at y=8
 ; So the difference is 184px
@@ -419,7 +413,7 @@ ButterflySteps:
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,D,0,R ; D2
 .db end
 
-.dstruct ButterflyStepsLevel2 instanceof StepsData data 24, ScrollTable2440, 0, 111, 4, 0
+.dstruct ButterflyStepsLevel2 instanceof StepsData data 24, ScrollTable2440, 0, 111, 0
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,U,R,U,L,U,R,0,0 ; I2
@@ -436,7 +430,7 @@ ButterflySteps:
 .db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
 .db end
 
-.dstruct ButterflyStepsLevel3 instanceof StepsData data 24, ScrollTable2440, 0, 111, 4, 0
+.dstruct ButterflyStepsLevel3 instanceof StepsData data 24, ScrollTable2440, 0, 111, 0
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,U,R,U,L,U,R,0,0 ; I2
@@ -453,7 +447,7 @@ ButterflySteps:
 .db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
 .db end
 
-.dstruct ButterflyStepsLevel4 instanceof StepsData data 12, ScrollTable1240, -1, 55, 4, 1
+.dstruct ButterflyStepsLevel4 instanceof StepsData data 12, ScrollTable1240, -1, 55, 1
 ; Arrows are drawn at y=192
 ; They line up at y=8
 ; So the difference is 184px
