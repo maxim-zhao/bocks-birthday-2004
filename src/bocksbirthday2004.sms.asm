@@ -308,6 +308,14 @@ main:
 
   ld a,(hl)
   inc hl
+  push hl
+    ld hl,StepsFrameCounter
+    add a,(hl)
+    ld (hl),a ; add on that extra bit so the steps code will exactly match the beat
+  pop hl
+
+  ld a,(hl)
+  inc hl
   ld (HasHalfSteps),a
 
   ld (StepHappeningPointer),hl ; the happening pointer is in time with the music, so it starts late
@@ -380,6 +388,7 @@ main:
   ScrollingDeltaTablePointer  dw  ; Pointer to scrolls per frame, should be FramesBetweenEvents long and sum to 40
   ArrowsYOffset               db  ; how much to shift overlap arrows up so they line up with an exact scrolling point
   StepLagTime                 db  ; how long to wait after drawing arrows before starting music and processing steps
+  StepLagTimeExtra            db  ; the number of frames by which the "current" step is misaligned with the drawing time
   HasHalfSteps                db  ; 1 if alternate steps should be a different colour
   ; Followed by steps data, terminated by "end"
 .endst
@@ -390,8 +399,19 @@ ButterflySteps:
 ; Music is 384 frames per "phrase"
 ; = 96 frames per "bar" (? terminology)
 ; = 24 frames per beat
+; Some levels have half-beats, so we have two "events" per beat; others have only one.
+; So we start with FramesBetweenEvents to capture this time.
+; Arrows are 40px tall so we have to scroll some multiple of 40px per event.
+; (Well, we really only need to scroll a multiple of 8... but that's more complicated. Also, scrolling <24 frames would mean some frames with 0 movement, so we have to scroll at least 32.)
+; Rather than compute this on the fly, we use tables of delta movements. This is ScrollingDeltaTablePointer.
+; Arrows are drawn at y=192, so we need to compute the number of frames between when an 
+; arrow is drawn and when it should be pressed. This is StepLagTime.
+; We also need to move the overlay up or down if there is an inexact match (as arrows 
+; move >=1px per frame). This is ArrowsYOffset.
+; The step arrows line up with the overlay at some fraction of the time between events being counted. In order to correctly rate the timing, we need to apply an offset to our counter for counting the frames between "happening" events (StepsFrameCounter). This is StepLagTimeExtra.
+; HasHalfSteps is a flag to draw "odd" events in a different colour.
 
-.dstruct ButterflyStepsLevel1 instanceof StepsData data 24, ScrollTable2440, 0, 111, 0
+.dstruct ButterflyStepsLevel1 instanceof StepsData data 24, ScrollTable2440, 0, 111, 5, 0
 ; Arrows are drawn at y=192
 ; They line up at y=8
 ; So the difference is 184px
@@ -413,7 +433,7 @@ ButterflySteps:
 .db 0,U,0,U,0,U,0,U,0,U,0,U,0,D,0,R ; D2
 .db end
 
-.dstruct ButterflyStepsLevel2 instanceof StepsData data 24, ScrollTable2440, 0, 111, 0
+.dstruct ButterflyStepsLevel2 instanceof StepsData data 24, ScrollTable2440, 0, 111, 5, 0
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,U,R,U,L,U,R,0,0 ; I2
@@ -430,7 +450,7 @@ ButterflySteps:
 .db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
 .db end
 
-.dstruct ButterflyStepsLevel3 instanceof StepsData data 24, ScrollTable2440, 0, 111, 0
+.dstruct ButterflyStepsLevel3 instanceof StepsData data 24, ScrollTable2440, 0, 111, 5, 0
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; I1
 .db 0,0,0,0,0,0,0,0,U,R,U,L,U,R,0,0 ; I2
@@ -447,7 +467,7 @@ ButterflySteps:
 .db 0,D,L,D,R,D,L,D,R,D,L,D,R,U,D,X ; D2
 .db end
 
-.dstruct ButterflyStepsLevel4 instanceof StepsData data 12, ScrollTable1240, -1, 55, 1
+.dstruct ButterflyStepsLevel4 instanceof StepsData data 12, ScrollTable1240, -1, 55, 4, 1
 ; Arrows are drawn at y=192
 ; They line up at y=8
 ; So the difference is 184px
