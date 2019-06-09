@@ -317,11 +317,6 @@ main:
   ld a,(hl)
   inc hl
   ld (HasHalfSteps),a
-  or a
-  jr z,+
-  ld a,%00001000
-  ld (ArrowHighByte),a ; if HasHalfSteps then first arrow is a half-step
-+:
 
   ld (StepHappeningPointer),hl ; the happening pointer is in time with the music, so it starts late
   ld (StepDrawingPointer),hl   ; the drawing pointer leads it, so it starts straight away
