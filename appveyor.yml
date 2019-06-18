@@ -7,7 +7,7 @@ build_script:
 
     cd src
     assets.cmd
-    compile.cmd bocksbirthday2004.sms.asm
+    compile.bat bocksbirthday2004.sms.asm
     7z a ..\bocksbirthday2004.zip bocksbirthday2004.sms ..\readme.md
 artifacts:
 - path: '*.zip'
