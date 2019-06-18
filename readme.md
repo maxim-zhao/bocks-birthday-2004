@@ -1,5 +1,10 @@
 # Bock's Birthday 2004
 
+[![Build status](https://ci.appveyor.com/api/projects/status/g2mgmtw067e3lntr?svg=true)](https://ci.appveyor.com/project/maxim-zhao/bocks-birthday-2004)
+![](https://img.shields.io/github/languages/top/maxim-zhao/bocks-birthday-2004.svg)
+![Z80](https://img.shields.io/badge/Language-Z80-green.svg)
+[![SMS Power!](https://img.shields.io/badge/SMS-Power!-blue.svg)](http://www.smspower.org/Homebrew/BocksBirthday2004-SMS)
+
 ## Starting Up
 
 1. Set up your Master System or Master System II as described in its instruction
