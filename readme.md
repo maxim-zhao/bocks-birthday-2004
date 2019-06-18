@@ -2,7 +2,7 @@
 
 [![Build status](https://ci.appveyor.com/api/projects/status/g2mgmtw067e3lntr?svg=true)](https://ci.appveyor.com/project/maxim-zhao/bocks-birthday-2004)
 ![](https://img.shields.io/github/languages/top/maxim-zhao/bocks-birthday-2004.svg)
-![Z80](https://img.shields.io/badge/Language-Z80-green.svg)
+![Z80](https://img.shields.io/badge/language-Z80-green.svg)
 [![SMS Power!](https://img.shields.io/badge/SMS-Power!-blue.svg)](http://www.smspower.org/Homebrew/BocksBirthday2004-SMS)
 [![gitmoji badge](https://img.shields.io/badge/gitmoji-%20😜%20😍-FFDD67.svg)](https://github.com/carloscuesta/gitmoji)
 
